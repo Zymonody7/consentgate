@@ -87,6 +87,10 @@ A React app (Vite + Tailwind, built offline, no CDN) with six pages:
 
 ![Reviewer console](docs/console.png)
 
+A decision, with the scope, the run and the sentence the gate verified:
+
+![Decision](docs/decision.png)
+
 The production and its message flow are visible in the Management Portal:
 
 ![Production configuration](docs/production.png)
