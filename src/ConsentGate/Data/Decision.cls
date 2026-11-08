@@ -33,6 +33,9 @@ Property LatencyMs As %Integer;
 /// PASS | OVERRIDDEN | ESCALATED | UNPARSEABLE
 Property GateResult As %String(MAXLEN = 32);
 
+/// 1 when the inbound message or a document contained instruction-like text
+Property InjectionFlag As %Integer;
+
 Property CreatedAt As %String(MAXLEN = 32);
 
 Index MRNIdx On MRN;

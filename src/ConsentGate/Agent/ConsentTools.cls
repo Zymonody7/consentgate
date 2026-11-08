@@ -33,7 +33,7 @@ ClassMethod GetConsentDocuments(mrn As %String) As %String
             "docType": (rs.DocType),
             "receivedOn": (rs.ReceivedOn),
             "source": (rs.Source),
-            "body": (rs.Body)
+            "body": (##class(ConsentGate.Policy.Untrusted).Frame(rs.Body))
         })
     }
     Quit out.%ToJSON()
