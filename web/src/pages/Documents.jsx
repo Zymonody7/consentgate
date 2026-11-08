@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, ChevronDown } from 'lucide-react'
+import { useLocation, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
 import { Card } from '../components/ui/card'
 import { useJson } from '../lib/data'
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 
 const PROV = {
   TEXT: { kind: 'outline', note: 'typed or exported text' },
@@ -10,16 +12,38 @@ const PROV = {
   OCR: { kind: 'untrusted', note: 'machine transcript' },
 }
 
+function renderWithMark(body, quote) {
+  const i = body.indexOf(quote)
+  if (i < 0) return body
+  return (
+    <>
+      {body.slice(0, i)}
+      <mark className="bg-redact-bg px-0.5 text-inherit">{quote}</mark>
+      {body.slice(i + quote.length)}
+    </>
+  )
+}
+
 export default function Documents() {
   const { data } = useJson('data/documents.json', [])
   const docs = Array.isArray(data) ? data : []
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(null)
+  const [prov, setProv] = useState('all')
+  const { docId } = useParams()
+  const location = useLocation()
+  const highlight = location.state?.quote || ''
+  useEffect(() => {
+    if (docId) setOpen(Number(docId))
+  }, [docId])
 
   const rows = useMemo(() => {
     const n = q.trim().toLowerCase()
-    return docs.filter((d) => !n || `${d.mrn} ${d.docType} ${d.source}`.toLowerCase().includes(n))
-  }, [docs, q])
+    return docs.filter((d) => {
+      if (prov !== 'all' && (d.provenance || 'TEXT') !== prov) return false
+      return !n || `${d.mrn} ${d.docType} ${d.source}`.toLowerCase().includes(n)
+    })
+  }, [docs, q, prov])
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -27,6 +51,15 @@ export default function Documents() {
         <p className="text-sm text-muted-foreground">
           The paperwork the gate verifies against. Provenance says where the text came from.
         </p>
+        <Tabs value={prov} onValueChange={setProv} className="ml-4">
+          <TabsList>
+            {['all', 'TEXT', 'EMBEDDED', 'OCR'].map((v) => (
+              <TabsTrigger key={v} value={v} className="text-[11px]">
+                {v === 'all' ? 'All' : v}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <input
@@ -49,7 +82,7 @@ export default function Documents() {
                 className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/40"
               >
                 <span className="w-8 font-mono text-[11px] text-muted-foreground">#{d.id}</span>
-                <span className="font-serif text-[15px]">{d.mrn}</span>
+                <span className="text-[14px] font-medium tnum">{d.mrn}</span>
                 <span className="text-xs text-muted-foreground">{d.docType}</span>
                 <Badge kind={prov.kind}>{d.provenance || 'TEXT'}</Badge>
                 <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{d.source}</span>
@@ -61,7 +94,11 @@ export default function Documents() {
                   <div className="mb-2 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
                     Text the gate verifies · {prov.note}
                   </div>
-                  <p className="max-w-[78ch] whitespace-pre-wrap font-serif text-[14.5px] leading-7">{d.body}</p>
+                  <p className="max-w-[78ch] whitespace-pre-wrap font-serif text-[14.5px] leading-7">
+                    {highlight && d.body.includes(highlight)
+                      ? renderWithMark(d.body, highlight)
+                      : d.body}
+                  </p>
                 </div>
               )}
             </Card>

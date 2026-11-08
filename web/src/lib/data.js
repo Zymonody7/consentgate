@@ -38,3 +38,19 @@ export function hhmm(iso) {
 export function decisionWord(d) {
   return { RELEASE: 'Release', REDACT: 'Redact', DENY: 'Deny', ESCALATE: 'Escalate' }[String(d || '').toUpperCase()] || d
 }
+
+export function deriveStats(decisions) {
+  const list = Array.isArray(decisions) ? decisions : []
+  const k = (d) => String(d.decision || '').toUpperCase()
+  return {
+    total: list.length,
+    released: list.filter((d) => k(d) === 'RELEASE').length,
+    redacted: list.filter((d) => k(d) === 'REDACT').length,
+    denied: list.filter((d) => k(d) === 'DENY').length,
+    escalated: list.filter((d) => k(d) === 'ESCALATE').length,
+    pendingReview: list.filter(
+      (d) => k(d) === 'ESCALATE' && !String(d.gateResult || '').startsWith('REVIEWED'),
+    ).length,
+    injectionFlagged: list.filter((d) => d.injectionFlag).length,
+  }
+}

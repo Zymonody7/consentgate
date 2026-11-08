@@ -76,7 +76,7 @@ export default function Decision() {
       <Card>
         <div className="flex flex-wrap items-start gap-4 border-b border-border p-6">
           <div className="min-w-0 flex-1">
-            <div className={`font-serif text-3xl tracking-tight ${tone}`}>{VERDICT[k] || k}</div>
+            <div className={`text-[26px] font-semibold tracking-tight ${tone}`}>{VERDICT[k] || k}</div>
             <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">{verdictLine(d)}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
@@ -86,7 +86,13 @@ export default function Decision() {
         </div>
 
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-6 py-4">
-          <span className="font-serif text-xl">{d.mrn}</span>
+          <span className="text-[15px] font-medium tnum">{d.mrn}</span>
+          {d.patientName ? (
+            <span className="text-sm text-muted-foreground">
+              {d.patientName}
+              {d.dob ? ` · born ${d.dob}` : ''}
+            </span>
+          ) : null}
           <span className="text-sm text-muted-foreground">
             {d.requestorOrg} · {d.purposeOfUse}
           </span>
@@ -94,6 +100,21 @@ export default function Decision() {
             {d.requestId} · {d.createdAt}
           </span>
         </div>
+
+        {d.injectionFlag ? (
+          <div className="border-b border-border bg-muted/40 px-6 py-4">
+            <div className="text-[13px] font-medium">Untrusted text in the request</div>
+            <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-muted-foreground">
+              The inbound message contained instruction-like text. It was treated as data, logged with the
+              decision, and could not change the release list - the model's output has no decision field.
+              {' '}
+              <Link to="/reader" className="underline underline-offset-2 hover:text-foreground">
+                See the field in the message reader
+              </Link>
+              .
+            </p>
+          </div>
+        ) : null}
 
         <div className="border-b border-border px-6 py-5">
           <SectionLabel>Scope</SectionLabel>
@@ -146,7 +167,13 @@ export default function Decision() {
               return (
                 <div key={i} className="overflow-hidden rounded-md border border-border">
                   <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background px-3.5 py-2">
-                    <span className="font-mono text-[11px] text-muted-foreground">Document {e.docId}</span>
+                    <Link
+                      to={`/documents/${e.docId}`}
+                      state={{ quote: e.quote }}
+                      className="font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      Document {e.docId}
+                    </Link>
                     {docById[String(e.docId)] ? (
                       <span className="text-[11px] text-muted-foreground">
                         {docById[String(e.docId)].docType} · {docById[String(e.docId)].source}
@@ -167,19 +194,48 @@ export default function Decision() {
                       )}
                     </span>
                   </div>
-                  <blockquote className="bg-card px-4 py-4 font-serif text-[16px] leading-7">
-                    <span className="mr-2 font-mono text-[10.5px] align-top text-muted-foreground">[Q{i + 1}]</span>
-                    “{e.quote}”
-                  </blockquote>
+                  {ok ? (
+                    <blockquote className="bg-card px-4 py-4 font-serif text-[16px] leading-7">
+                      <span className="mr-2 font-mono text-[10.5px] align-top text-muted-foreground">[Q{i + 1}]</span>
+                      “{e.quote}”
+                    </blockquote>
+                  ) : (
+                    <div className="bg-card px-4 py-3.5 text-[12.5px] text-muted-foreground">
+                      <span className="font-mono text-[10.5px]">[Q{i + 1}]</span> “{e.quote}”
+                      {e.reason ? <div className="mt-1.5 text-[11.5px]">Rejected: {e.reason}</div> : null}
+                    </div>
+                  )}
                 </div>
               )
             })}
-            {evidence.length === 0 && <p className="text-xs text-muted-foreground">No evidence recorded for this view.</p>}
+            {evidence.length === 0 && (
+              <p className="max-w-[70ch] text-[12.5px] leading-relaxed text-muted-foreground">
+                No finding survived verification, so the gate escalated instead of acting on an unverifiable
+                claim. The rationale above records what the model read; the request needs a person.
+              </p>
+            )}
           </div>
 
-          <p className="mt-4 rounded-md border border-dashed border-border px-3.5 py-2.5 text-[12px] text-muted-foreground">
-            Reviews are recorded through the authenticated API at <span className="font-mono">/consentgate/api/review</span>.
-          </p>
+          {d.decision === 'ESCALATE' ? (
+            <div className="mt-5 flex flex-wrap items-center gap-3 rounded-md border border-border bg-background px-3.5 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-medium">This request needs a human decision</div>
+                <div className="text-[12px] text-muted-foreground">
+                  Recording a review is a write and requires a signed-in session. This console is read-only.
+                </div>
+              </div>
+              <button disabled title="Requires an authenticated session" className="h-8 cursor-not-allowed rounded-md border border-border px-3 text-xs text-muted-foreground opacity-60">
+                Approve release
+              </button>
+              <button disabled title="Requires an authenticated session" className="h-8 cursor-not-allowed rounded-md border border-border px-3 text-xs text-muted-foreground opacity-60">
+                Uphold denial
+              </button>
+            </div>
+          ) : (
+            <p className="mt-4 rounded-md border border-dashed border-border px-3.5 py-2.5 text-[12px] text-muted-foreground">
+              Read-only record. Reviews are written through <span className="font-mono">/consentgate/api/review</span>.
+            </p>
+          )}
         </div>
       </Card>
 

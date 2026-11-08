@@ -17,6 +17,7 @@ export default function App() {
           <Route path="/queue" element={<Queue />} />
           <Route path="/decision/:id" element={<Decision />} />
           <Route path="/documents" element={<Documents />} />
+          <Route path="/documents/:docId" element={<Documents />} />
           <Route path="/reader" element={<Reader />} />
           <Route path="/rules" element={<Rules />} />
           <Route path="*" element={<Overview />} />

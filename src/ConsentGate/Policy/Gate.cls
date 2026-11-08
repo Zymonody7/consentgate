@@ -114,6 +114,7 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
             }
         } Else {
             Do result.notes.%Push(category_" finding rejected: "_why)
+            Do verified.%Push({"docId": (docId), "category": (category), "effect": (effect), "quote": (quote), "verified": (0), "reason": (why)})
             Set result.gate = "OVERRIDDEN"
         }
         Set i = i + 1

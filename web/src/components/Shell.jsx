@@ -11,7 +11,7 @@ import {
   Sun,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
-import { useDecisions, useJson } from '../lib/data'
+import { useDecisions } from '../lib/data'
 
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -46,7 +46,7 @@ export default function Shell({ children }) {
   const [dark, setDark] = useTheme()
   const location = useLocation()
   const { decisions } = useDecisions()
-  const { data: stats } = useJson('data/stats.json', null)
+  const stats = { total: decisions.length }
   const title = TITLES[location.pathname] || (location.pathname.startsWith('/decision') ? 'Decision' : 'ConsentGate')
   const model = decisions[0]?.model || '—'
 

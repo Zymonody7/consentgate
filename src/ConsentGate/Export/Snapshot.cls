@@ -38,7 +38,7 @@ ClassMethod WriteFile(path As %String, content As %String) As %Status
 ClassMethod Decisions() As %String
 {
     Set stmt = ##class(%SQL.Statement).%New()
-    Set sc = stmt.%Prepare("SELECT TOP 50 ID, RequestID, MRN, RequestorOrg, PurposeOfUse, Decision, GateResult, Released, Withheld, Rationale, Evidence, Confidence, Model, LatencyMs, InjectionFlag, CreatedAt FROM ConsentGate_Data.Decision ORDER BY ID DESC")
+    Set sc = stmt.%Prepare("SELECT TOP 200 d.ID, d.RequestID, d.MRN, d.RequestorOrg, d.PurposeOfUse, d.Decision, d.GateResult, d.Released, d.Withheld, d.Rationale, d.Evidence, d.Confidence, d.Model, d.LatencyMs, d.InjectionFlag, d.CreatedAt, p.GivenName, p.FamilyName, p.DOB FROM ConsentGate_Data.Decision d LEFT JOIN ConsentGate_Data.Patient p ON p.MRN = d.MRN ORDER BY d.ID DESC")
     If $$$ISERR(sc) Quit "[]"
     Set rs = stmt.%Execute()
 
@@ -62,31 +62,40 @@ ClassMethod Decisions() As %String
     }
 
     Set out = []
-    While rs.%Next() {
-        Set row = {}
-        Set row.id = +rs.%GetData(1)
-        Set row.requestId = rs.%GetData(2)
-        Set row.mrn = rs.%GetData(3)
-        Set row.requestorOrg = rs.%GetData(4)
-        Set row.purposeOfUse = rs.%GetData(5)
-        Set row.decision = rs.%GetData(6)
-        Set row.gateResult = rs.%GetData(7)
-        Set row.released = ..ParseArray(rs.%GetData(8))
-        Set row.withheld = ..ParseArray(rs.%GetData(9))
-        Set row.rationale = rs.%GetData(10)
-        Set row.evidence = ..ParseArray(rs.%GetData(11))
-        Set row.confidence = rs.%GetData(12)
-        Set row.model = rs.%GetData(13)
-        Set row.latencyMs = +rs.%GetData(14)
-        Set row.injectionFlag = +rs.%GetData(15)
-        Set row.createdAt = rs.%GetData(16)
-        Set did = +rs.%GetData(1)
-        If $DATA(reviews(did)) {
-            Do row.%Set("review", reviews(did))
-        } Else {
-            Do row.%Set("review", "", "null")
+    Set seen = {}
+    Set done = 0
+    While 'done && rs.%Next() {
+        Set rid = rs.%GetData(6)_"|"_rs.%GetData(2)
+        If '$DATA(seen(rid)) {
+            Set seen(rid) = 1
+            Set row = {}
+            Set row.id = +rs.%GetData(1)
+            Set row.requestId = rs.%GetData(2)
+            Set row.mrn = rs.%GetData(3)
+            Set row.requestorOrg = rs.%GetData(4)
+            Set row.purposeOfUse = rs.%GetData(5)
+            Set row.decision = rs.%GetData(6)
+            Set row.gateResult = rs.%GetData(7)
+            Set row.released = ..ParseArray(rs.%GetData(8))
+            Set row.withheld = ..ParseArray(rs.%GetData(9))
+            Set row.rationale = rs.%GetData(10)
+            Set row.evidence = ..ParseArray(rs.%GetData(11))
+            Set row.confidence = rs.%GetData(12)
+            Set row.model = rs.%GetData(13)
+            Set row.latencyMs = +rs.%GetData(14)
+            Set row.injectionFlag = +rs.%GetData(15)
+            Set row.createdAt = rs.%GetData(16)
+            Set row.patientName = $ZSTRIP(rs.%GetData(17)_" "_rs.%GetData(18), "<>W")
+            Set row.dob = rs.%GetData(19)
+            Set did = +rs.%GetData(1)
+            If $DATA(reviews(did)) {
+                Do row.%Set("review", reviews(did))
+            } Else {
+                Do row.%Set("review", "", "null")
+            }
+            Do out.%Push(row)
+            If out.%Size() >= 50 Set done = 1
         }
-        Do out.%Push(row)
     }
     Quit out.%ToJSON()
 }
