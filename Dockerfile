@@ -13,11 +13,18 @@ ENV IRISUSERNAME "_SYSTEM"
 ENV IRISPASSWORD "SYS"
 ENV IRISNAMESPACE $NAMESPACE
 ENV PYTHON_PATH=/usr/irissys/bin/:/usr/irissys/mgr/python
+ENV CONSENTGATE_CONSOLE_DIR=/usr/irissys/csp/console/data
 
 COPY merge.cpf /home/irisowner/dev/merge.cpf
-ENV CONSENTGATE_CONSOLE_DIR=/usr/irissys/csp/console/data
+
+# The reviewer console is a static page served by the container's own web
+# server. It must bypass the CSP handler, which owns every other path.
+USER root
 COPY console /usr/irissys/csp/console
-RUN printf '<Location /console>\n    CSP Off\n</Location>\n' >> /usr/irissys/httpd/conf/httpd-local.conf
+RUN mkdir -p /usr/irissys/csp/console/data && \
+    chmod -R 777 /usr/irissys/csp/console && \
+    printf 'DirectoryIndex index.html\n<Location /console>\n    CSP Off\n</Location>\n' >> /usr/irissys/httpd/conf/httpd-local.conf
+USER irisowner
 
 RUN --mount=type=bind,src=.,dst=. \
     iris start IRIS && \

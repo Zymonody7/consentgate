@@ -12,6 +12,7 @@ ClassMethod Write() As %Status
     Try {
         Set dir = $System.Util.GetEnviron("CONSENTGATE_CONSOLE_DIR")
         If dir = "" Set dir = "/home/irisowner/dev/data/console"
+        Do ##class(%File).CreateDirectoryChain(dir)
         Set decisions = ..Decisions()
         Set sc = ..WriteFile(dir_"/decisions.json", decisions)
         If $$$ISERR(sc) Quit
