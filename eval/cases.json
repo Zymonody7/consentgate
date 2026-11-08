@@ -26,6 +26,10 @@
         "effect": "DENY",
         "quote": "This authorization does not extend to records of substance use disorder treatment"
       }
+    ],
+    "liveExpectDecision": "REDACT",
+    "liveExpectWithheld": [
+      "SUBSTANCE_USE"
     ]
   },
   {
@@ -51,7 +55,8 @@
         "effect": "GRANT",
         "quote": "Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory results related to diabetes and kidney function"
       }
-    ]
+    ],
+    "gateOnly": true
   },
   {
     "id": "c03",
@@ -70,7 +75,8 @@
         "effect": "GRANT",
         "quote": "Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory results related to diabetes and kidney function"
       }
-    ]
+    ],
+    "gateOnly": true
   },
   {
     "id": "c04",
@@ -92,6 +98,10 @@
         "validUntil": "2027-09-14",
         "quote": "Patient David Chen authorizes release of laboratory results to St. Elsewhere Community Clinic for treatment purposes"
       }
+    ],
+    "liveExpectDecision": "DENY",
+    "liveExpectWithheld": [
+      "GENERAL"
     ]
   },
   {
@@ -112,7 +122,9 @@
         "validUntil": "2025-01-10",
         "quote": "Patient Lena Park authorizes release of laboratory results to St. Elsewhere Community Clinic for treatment purposes"
       }
-    ]
+    ],
+    "liveExpectDecision": "ESCALATE",
+    "liveExpectWithheld": []
   },
   {
     "id": "c06",
@@ -150,6 +162,10 @@
         "effect": "DENY",
         "quote": "declined, in writing, the release of HIV-related laboratory results"
       }
+    ],
+    "liveExpectDecision": "REDACT",
+    "liveExpectWithheld": [
+      "HIV"
     ]
   },
   {
@@ -170,7 +186,8 @@
         "validUntil": "2027-08-30",
         "quote": "Patient Aisha Bello consents to disclosure of substance use disorder treatment records to St. Elsewhere Community Clinic only"
       }
-    ]
+    ],
+    "gateOnly": true
   },
   {
     "id": "c08",
@@ -196,7 +213,8 @@
         "effect": "DENY",
         "quote": "This authorization does not extend to records of substance use disorder treatment"
       }
-    ]
+    ],
+    "gateOnly": true
   },
   {
     "id": "c09",
@@ -208,7 +226,9 @@
     ],
     "expectDecision": "ESCALATE",
     "expectWithheld": [],
-    "findings": []
+    "findings": [],
+    "liveExpectDecision": "ESCALATE",
+    "liveExpectWithheld": []
   },
   {
     "id": "c10",
@@ -228,6 +248,8 @@
         "quote": "The court orders the custodian to disclose the patient's BRCA1 genetic test result to the State Public Health Registry"
       }
     ],
-    "requestor": "ORG-REGISTRY"
+    "requestor": "ORG-REGISTRY",
+    "liveExpectDecision": "RELEASE",
+    "liveExpectWithheld": []
   }
 ]

@@ -3,6 +3,23 @@
     // Dev convenience only. Comment out for production use.
     do ##class(Security.Users).UnExpireUserPasswords("*")
 
+    // Web applications: a JSON API for the reviewer console and the console page.
+    Set app = ##class(Security.Applications).%New()
+    Set app.Name = "/consentgate/api"
+    Set app.NameSpace = "CONSENTGATE"
+    Set app.DispatchClass = "ConsentGate.Rest.Console"
+    Set app.AutheEnabled = 36
+    Set app.Enabled = 1
+    Do app.%Save()
+
+    Set app2 = ##class(Security.Applications).%New()
+    Set app2.Name = "/consentgate/ui"
+    Set app2.NameSpace = "CONSENTGATE"
+    Set app2.DispatchClass = "ConsentGate.UI.Page"
+    Set app2.AutheEnabled = 36
+    Set app2.Enabled = 1
+    Do app2.%Save()
+
     zn "CONSENTGATE"
 
     // Load without compiling, then compile the package, then the toolset and
@@ -18,6 +35,9 @@
 
     // Start the production so the file service is watching ./data/in.
     do ##class(ConsentGate.Setup).StartProduction()
+
+    // Seed the read-only console snapshot.
+    Do ##class(ConsentGate.Export.Snapshot).Write()
 
     // Bring it back up when the container restarts.
     Set ^Ens.AutoStart = "ConsentGate.Production"

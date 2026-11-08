@@ -67,6 +67,34 @@ OBX|3|NM|9459-0^Ethyl glucuronide, urine||[WITHHELD: SUBSTANCE_USE]|ng/mL||H|||F
 
 ---
 
+## The reviewer console
+
+`http://localhost:52773/console/` - no login, served by the container's own web
+server from a snapshot the production writes after every decision.
+
+A second, authenticated console lives at `/consentgate/ui/` (sign in with
+`SuperUser` / `SYS`); that is where reviews are recorded, because a review is a
+write and a write belongs behind a login. The static page is read-only on
+purpose and says so if you press an action button.
+
+The JSON API behind the authenticated console is at `/consentgate/api`.
+
+A privacy officer sees every decision the production made, newest first, with the
+sentence each finding rests on. Escalated rows carry two actions - approve the
+release, or uphold the denial - and both require a reviewer name that is written
+to the audit trail. Nothing on the page is a claim: the evidence pane shows the
+document, the quoted sentence, and whether the gate verified it.
+
+![Reviewer console](docs/console.png)
+
+The production and its message flow are visible in the Management Portal:
+
+![Production configuration](docs/production.png)
+
+![Visual trace](docs/visual-trace.png)
+
+---
+
 ## Architecture
 
 ```
@@ -129,15 +157,37 @@ bodies are wrapped in explicit data markers, and instruction-like text sets
 
 ## Evaluation
 
-`eval/cases.json` contains ten consent situations with ground-truth dispositions,
-each paired with a model output: six honest, four adversarial (fabricated quote,
-real quote used for the wrong category, wrong recipient, contradictory findings).
-`ConsentGate.Eval.Harness` feeds them straight into the gate and reports decision
-and scope accuracy.
+Two measurements, deliberately separated.
 
-This measures **the gate's handling of given model outputs**, not model quality -
-which is exactly the claim being made. A live model is used by the production; the
-harness is reproducible without a key.
+**The gate, against fixed model outputs.** `eval/cases.json` holds ten consent
+situations with ground-truth dispositions, each paired with a model output: six
+honest, four adversarial (fabricated quote, a real quote used for the wrong
+category, a wrong recipient, same-day contradictory findings).
+`ConsentGate.Eval.Harness.Run()` feeds them straight into the gate:
+
+```
+cases=10  decision match=10  disposition+scope match=10
+```
+
+**The whole pipeline, against a live model.** `Harness.RunLive()` calls the agent
+for the six cases whose ground truth is model-independent, then passes the real
+output through the gate. With `deepseek-flash`:
+
+```
+cases=6  decision match=6  scope match=6  gate-only skipped=4
+```
+
+The four skipped cases exist to test the gate with outputs a model would not
+produce; running them live measures something else.
+
+One expectation was corrected during that run. For a request from ORG-CLINIC
+covering GENERAL and GENETIC, the only instrument was a court order naming
+ORG-REGISTRY. We expected `REDACT`; the gate escalated because the named recipient
+did not match the requesting organisation. The gate was right and the expectation
+was wrong, which is the kind of correction an evaluation is for.
+
+Neither harness claims model quality in general. They measure what this system
+does with the outputs it receives, on synthetic records.
 
 ---
 

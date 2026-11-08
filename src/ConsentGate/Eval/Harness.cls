@@ -87,4 +87,53 @@ ClassMethod SameSet(a As %DynamicArray, b As %DynamicArray) As %Boolean
     Quit ok
 }
 
+
+ClassMethod RunLive(path As %String = "/home/irisowner/dev/eval/cases.json") As %Status
+{
+    Set f = ##class(%Stream.FileCharacter).%New()
+    Set f.Filename = path
+    Set cases = ##class(%DynamicArray).%FromJSON(f.Read())
+
+    Set total = 0, decisionOk = 0, scopeOk = 0, skipped = 0
+    Write "LIVE MODEL - each case costs one or more provider calls", !
+    Write "id    decision          withheld                   result", !
+    Write $Translate($Justify("", 68), " ", "-"), !
+
+    Set i = 0
+    While i < cases.%Size() {
+        Set c = cases.%Get(i)
+        If c.%Get("gateOnly") {
+            Set skipped = skipped + 1
+            Write $Justify(c.id, 6), "  skipped (gate-only case: it tests the gate with an adversarial model output)", !
+        } Else {
+            Set total = total + 1
+            Set requestor = c.%Get("requestor")
+            If requestor = "" Set requestor = "ORG-CLINIC"
+
+            Set agentRaw = ##class(ConsentGate.BP.Disclosure).RunAgent(c.mrn, requestor, "TREATMENT", c.categories, 0)
+            Set verdict = ##class(ConsentGate.Policy.Gate).Apply(c.mrn, requestor, c.categories, agentRaw)
+
+            Set dOk = (verdict.decision = c.%Get("liveExpectDecision"))
+            Set wOk = ..SameSet(verdict.withhold, c.%Get("liveExpectWithheld"))
+            If dOk Set decisionOk = decisionOk + 1
+            If dOk && wOk Set scopeOk = scopeOk + 1
+
+            Write $Justify(c.id, 6), " ", $Justify(verdict.decision, 8), "/", $Justify(c.%Get("liveExpectDecision"), 8), "  "
+            Write $Justify(verdict.withhold.%ToJSON(), 24), " "
+            If dOk && wOk {
+                Write "PASS  ", c.label
+            } Else {
+                Write "FAIL  ", c.label, "   gate=", verdict.gate
+                If verdict.notes.%Size() > 0 Write "  notes=", verdict.notes.%ToJSON()
+            }
+            Write !
+        }
+        Set i = i + 1
+    }
+
+    Write !
+    Write "cases=", total, "  decision match=", decisionOk, "  scope match=", scopeOk, "  gate-only skipped=", skipped, !
+    Quit $$$OK
+}
+
 }

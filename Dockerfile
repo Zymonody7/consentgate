@@ -15,6 +15,9 @@ ENV IRISNAMESPACE $NAMESPACE
 ENV PYTHON_PATH=/usr/irissys/bin/:/usr/irissys/mgr/python
 
 COPY merge.cpf /home/irisowner/dev/merge.cpf
+ENV CONSENTGATE_CONSOLE_DIR=/usr/irissys/csp/console/data
+COPY console /usr/irissys/csp/console
+RUN printf '<Location /console>\n    CSP Off\n</Location>\n' >> /usr/irissys/httpd/conf/httpd-local.conf
 
 RUN --mount=type=bind,src=.,dst=. \
     iris start IRIS && \

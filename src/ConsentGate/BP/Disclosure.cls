@@ -118,6 +118,10 @@ Method OnRequest(pRequest As Ens.StreamContainer, Output pResponse As Ens.Respon
         If decision = "ESCALATE" Set target = "Escalate"
         If decision = "DENY" Set target = "Deny"
         Set tSC = ..SendRequestSync(target, out, .pResponse)
+
+        // Refresh the read-only console snapshot.
+        Set snapSC = ##class(ConsentGate.Export.Snapshot).Write()
+        If $$$ISERR(snapSC) $$$LOGWARNING("Console snapshot export failed: "_$System.Status.GetErrorText(snapSC))
     } Catch ex {
         Set tSC = ex.AsStatus()
         $$$LOGERROR("ConsentGate failed: "_$System.Status.GetErrorText(tSC))
