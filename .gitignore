@@ -1,5 +1,7 @@
 .env
 data/out/*.hl7
+data/out/**/*.hl7
 *.log
 .DS_Store
 .venv/
+console/data/*.json

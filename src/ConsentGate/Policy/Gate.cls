@@ -63,6 +63,7 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
     Set latestDate = {}
     Set verifiedCount = 0
     Set conflicted = 0
+    Set ocrProtected = 0
     Set today = $ZDATE($HOROLOG, 3)
 
     Set i = 0
@@ -101,7 +102,8 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
 
         If ok {
             Set verifiedCount = verifiedCount + 1
-            Do result.evidence.%Push({"docId": (docId), "category": (category), "effect": (effect), "quote": (quote), "verified": (1)})
+            Do result.evidence.%Push({"docId": (docId), "category": (category), "effect": (effect), "quote": (quote), "verified": (1), "docType": (doc.DocType), "provenance": (doc.Provenance)})
+            If (effect = "GRANT") && ($ZCONVERT(doc.Provenance, "U") = "OCR") && ..IsProtected(category) Set ocrProtected = 1
 
             Set prior = latestDate.%Get(category)
             If (prior = "") || (docDate > prior) {
@@ -126,6 +128,15 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
     If conflicted {
         Do result.notes.%Push("Two findings dated the same day disagree; escalated.")
         Set result.gate = "OVERRIDDEN"
+        Quit result
+    }
+
+    // An OCR transcript is machine-derived: it may be right, but it is not the
+    // paper. Protected categories do not leave on a machine transcript alone.
+    If ocrProtected {
+        Do result.notes.%Push("A protected category was granted from an OCR transcript; escalated for human verification of the scan.")
+        Set result.gate = "OVERRIDDEN"
+        Set result.decision = "ESCALATE"
         Quit result
     }
 
@@ -186,6 +197,11 @@ ClassMethod QuoteSpeaksTo(quote As %String, category As %String) As %Boolean
     If category = "HIV" Quit ..Mentions(q, "HIV,AIDS,ANTIRETROVIRAL")
     If category = "GENETIC" Quit ..Mentions(q, "GENETIC,BRCA,GENOMIC")
     Quit ..Mentions(q, "AUTHORIZ,AUTHORIS,RELEASE,DISCLOS,CONSENT,PERMIT,LABORATORY RESULT")
+}
+
+ClassMethod IsProtected(category As %String) As %Boolean
+{
+    Quit (category = "SUBSTANCE_USE") || (category = "HIV") || (category = "GENETIC")
 }
 
 ClassMethod Mentions(text As %String, list As %String) As %Boolean

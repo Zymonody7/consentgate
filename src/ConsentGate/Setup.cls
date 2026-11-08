@@ -16,6 +16,7 @@ ClassMethod Seed() As %Status
     Do ..Patient("CG-0003", "Bello", "Aisha", "1990-06-27")
     Do ..Patient("CG-0004", "Wright", "Thomas", "1963-02-19")
     Do ..Patient("CG-0005", "Park", "Lena", "1998-09-30")
+    Do ..Patient("CG-0006", "Okafor", "Nadia", "1979-03-05")
 
     // --- Requestors -----------------------------------------------------
     Do ..Requestor("ORG-CLINIC", "St. Elsewhere Community Clinic", "TREATMENT", "Continuity-of-care referral from primary care.")
@@ -122,6 +123,7 @@ ClassMethod Doc(mrn As %String, docType As %String, receivedOn As %String, sourc
     Set d.ReceivedOn = receivedOn
     Set d.Source = source
     Set d.Body = body
+    Set d.Provenance = "TEXT"
     Quit d.%Save()
 }
 

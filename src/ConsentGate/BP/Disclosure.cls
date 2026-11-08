@@ -53,6 +53,11 @@ Method OnRequest(pRequest As Ens.StreamContainer, Output pResponse As Ens.Respon
         Set purpose = ##class(ConsentGate.Policy.Untrusted).Field(purpose)
         If injection $$$LOGWARNING("ConsentGate "_reqId_": instruction-like content in inbound payload; treated as data")
 
+        // --- Consent paperwork may arrive inside the message -----------
+        // HL7 v2 OBX with an ED (encapsulated data) value: the base64 payload
+        // is the authorisation letter itself. Store it before asking the agent.
+        Do ..IngestAttachments(text, mrn, reqId)
+
         // --- Which consent categories does this message contain? -------
         Set catsSeen = {}
         Set requested = []
@@ -223,6 +228,65 @@ ClassMethod DocId(mrn As %String, docType As %String, contains As %String) As %I
     Set rs = ##class(ConsentGate.Data.ConsentDoc).ForMRN(mrn)
     While rs.%Next() {
         If (found = 0) && (rs.DocType = docType) && ($FIND(rs.Body, contains) > 0) Set found = rs.ID
+    }
+    Quit found
+}
+
+
+/// Extract ED (encapsulated data) attachments from the message and store them
+/// as consent documents, so the findings can cite paperwork that arrived with
+/// the request rather than sitting in a scanned archive.
+ClassMethod IngestAttachments(text As %String, mrn As %String, reqId As %String) As %Integer
+{
+    Set stored = 0
+    If mrn = "" Quit 0
+    Set cr = $CHAR(13)
+    Set n = $LENGTH(text, cr)
+    Set i = 0
+    While i < n {
+        Set seg = $PIECE(text, cr, i + 1)
+        If $PIECE(seg, "|", 1) = "OBX" {
+            If $ZCONVERT($PIECE(seg, "|", 3), "U") = "ED" {
+                Set ed = $PIECE(seg, "|", 6)
+                Set encoding = $ZCONVERT($PIECE(ed, "^", 4), "U")
+                Set payload = $PIECE(ed, "^", 5, 99)
+                If (encoding = "BASE64") && (payload '= "") {
+                    Set code = $ZCONVERT($PIECE($PIECE(seg, "|", 4), "^", 1), "U")
+                    Set docType = "AUTHORIZATION"
+                    If code = "REVOKE" Set docType = "REVOCATION"
+                    If code = "PART2" Set docType = "PART2_CONSENT"
+                    If code = "COURT" Set docType = "COURT_ORDER"
+                    Set source = "attachment:"_reqId_"."_code
+                    If '..AttachmentSeen(mrn, source) {
+                        Try {
+                            Set body = $SYSTEM.Encryption.Base64Decode(payload)
+                            Set doc = ##class(ConsentGate.Data.ConsentDoc).%New()
+                            Set doc.MRN = mrn
+                            Set doc.DocType = docType
+                            Set doc.ReceivedOn = $ZDATE($HOROLOG, 3)
+                            Set doc.Source = source
+                            Set doc.Body = body
+                            Set doc.Provenance = "EMBEDDED"
+                            If $$$ISOK(doc.%Save()) Set stored = stored + 1
+                        } Catch ex {
+                            $$$LOGWARNING("Could not decode attachment "_code_": "_ex.DisplayString())
+                        }
+                    }
+                }
+            }
+        }
+        Set i = i + 1
+    }
+    If stored > 0 $$$LOGINFO("Ingested "_stored_" embedded consent document(s) from "_reqId)
+    Quit stored
+}
+
+ClassMethod AttachmentSeen(mrn As %String, source As %String) As %Boolean
+{
+    Set found = 0
+    Set rs = ##class(ConsentGate.Data.ConsentDoc).ForMRN(mrn)
+    While rs.%Next() {
+        If rs.Source = source Set found = 1
     }
     Quit found
 }

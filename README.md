@@ -32,6 +32,8 @@ docker compose up -d --build
 
 Management portal: <http://localhost:52773/csp/sys/UtilHome.csp> (`SuperUser` / `SYS`).
 
+Reviewer console: <http://localhost:52773/console/index.html> - no login needed.
+
 Run one scenario:
 
 ```bash
@@ -69,21 +71,14 @@ OBX|3|NM|9459-0^Ethyl glucuronide, urine||[WITHHELD: SUBSTANCE_USE]|ng/mL||H|||F
 
 ## The reviewer console
 
-`http://localhost:52773/console/` - no login, served by the container's own web
-server from a snapshot the production writes after every decision.
+`http://localhost:52773/console/index.html` - no login, served by the container's
+own web server from a snapshot the production writes after every decision.
 
-A second, authenticated console lives at `/consentgate/ui/` (sign in with
-`SuperUser` / `SYS`); that is where reviews are recorded, because a review is a
-write and a write belongs behind a login. The static page is read-only on
-purpose and says so if you press an action button.
-
-The JSON API behind the authenticated console is at `/consentgate/api`.
-
-A privacy officer sees every decision the production made, newest first, with the
-sentence each finding rests on. Escalated rows carry two actions - approve the
-release, or uphold the denial - and both require a reviewer name that is written
-to the audit trail. Nothing on the page is a claim: the evidence pane shows the
-document, the quoted sentence, and whether the gate verified it.
+The console is deliberately read-only. A decision is already the product of a
+deterministic gate; the console exists so a privacy officer can check the queue,
+read the sentence each finding rests on, and see where the gate overrode the
+model. Recording a human review is a write, and the write API (`/consentgate/api/review`,
+IRIS login required) is kept separate from a page anyone can open.
 
 ![Reviewer console](docs/console.png)
 
@@ -133,6 +128,29 @@ The production and its message flow are visible in the Management Portal:
 ```
 
 ---
+
+## Paperwork that is not text
+
+Two things arrive that are not plain text, and both are handled in the message
+path rather than by a side process:
+
+**A consent letter inside the HL7 message.** An `OBX` with value type `ED`
+carries the authorisation as a base64 attachment. `ConsentGate.BP.Disclosure`
+decodes it, stores it as a consent document for that patient, and the agent can
+cite it in the same decision. Sample `007_attachment.hl7` does exactly this and
+comes out as `RELEASE`.
+
+**A letter that is a scan.** Scanned documents have no text to verify against,
+so every document records its `Provenance` - `TEXT`, `EMBEDDED` or `OCR`. The
+gate still verifies quotes against the transcript, because that is what an audit
+can reproduce, and it treats a machine transcript differently from paper:
+
+| Provenance | What the gate does |
+|---|---|
+| `TEXT` / `EMBEDDED` | verify the quote, decide normally |
+| `OCR` | verify, but a grant of SUBSTANCE_USE, HIV or GENETIC is escalated - a machine transcript is not the paper |
+
+The scanned original is kept on the document (`ScanFile`) for the reviewer.
 
 ## The three things this entry does that the field does not
 

@@ -15,6 +15,12 @@ Property Source As %String(MAXLEN = 128);
 
 Property Body As %String(MAXLEN = 16384) [ Required ];
 
+/// TEXT | EMBEDDED | OCR - where the text the gate verifies against came from
+Property Provenance As %String(MAXLEN = 16);
+
+/// Optional path to the scanned original, when the paper arrived as an image
+Property ScanFile As %String(MAXLEN = 255);
+
 Index MRNIdx On MRN;
 
 ClassMethod ForMRN(mrn As %String) As %SQL.StatementResult

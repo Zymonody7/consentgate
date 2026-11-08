@@ -3,7 +3,8 @@
     // Dev convenience only. Comment out for production use.
     do ##class(Security.Users).UnExpireUserPasswords("*")
 
-    // Web applications: a JSON API for the reviewer console and the console page.
+    // The write API for recording a human review. The read-only console page is
+    // served statically by the web server, so no CSP application is needed for it.
     Set app = ##class(Security.Applications).%New()
     Set app.Name = "/consentgate/api"
     Set app.NameSpace = "CONSENTGATE"
@@ -11,14 +12,6 @@
     Set app.AutheEnabled = 36
     Set app.Enabled = 1
     Do app.%Save()
-
-    Set app2 = ##class(Security.Applications).%New()
-    Set app2.Name = "/consentgate/ui"
-    Set app2.NameSpace = "CONSENTGATE"
-    Set app2.DispatchClass = "ConsentGate.UI.Page"
-    Set app2.AutheEnabled = 36
-    Set app2.Enabled = 1
-    Do app2.%Save()
 
     zn "CONSENTGATE"
 

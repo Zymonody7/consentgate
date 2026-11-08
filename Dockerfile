@@ -23,7 +23,7 @@ USER root
 COPY console /usr/irissys/csp/console
 RUN mkdir -p /usr/irissys/csp/console/data && \
     chmod -R 777 /usr/irissys/csp/console && \
-    printf 'DirectoryIndex index.html\n<Location /console>\n    CSP Off\n</Location>\n' >> /usr/irissys/httpd/conf/httpd-local.conf
+    printf '<Location /console>\n    CSP Off\n</Location>\n' >> /usr/irissys/httpd/conf/httpd-local.conf
 USER irisowner
 
 RUN --mount=type=bind,src=.,dst=. \
