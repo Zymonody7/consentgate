@@ -1,0 +1,9 @@
+[Actions]
+ModifyService:Name=%Service_CallIn,Enabled=1,AutheEnabled=48
+CreateResource:Name=%DB_CONSENTGATE_DATA,Description="CONSENTGATE_DATA database resource"
+CreateDatabase:Name=CONSENTGATE_DATA,Directory=/usr/irissys/mgr/CONSENTGATE_DATA,Resource=%DB_CONSENTGATE_DATA
+CreateResource:Name=%DB_CONSENTGATE_CODE,Description="CONSENTGATE_CODE database resource"
+CreateDatabase:Name=CONSENTGATE_CODE,Directory=/usr/irissys/mgr/CONSENTGATE_CODE,Resource=%DB_CONSENTGATE_CODE
+CreateNamespace:Name=CONSENTGATE,Globals=CONSENTGATE_DATA,Routines=CONSENTGATE_CODE,Interop=1
+[Startup]
+SystemMode=AI Hub EAP

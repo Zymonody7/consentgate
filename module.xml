@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+  <Document name="consentgate.ZPM">
+    <Module>
+      <Name>consentgate</Name>
+      <Version>0.1.0</Version>
+      <Description>ConsentGate - consent-aware HL7 disclosure gate for IRIS AI Hub</Description>
+      <Packaging>module</Packaging>
+      <SourcesRoot>src</SourcesRoot>
+      <Resource Name="ConsentGate.PKG"/>
+    </Module>
+  </Document>
+</Export>
