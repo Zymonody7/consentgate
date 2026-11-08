@@ -72,13 +72,18 @@ OBX|3|NM|9459-0^Ethyl glucuronide, urine||[WITHHELD: SUBSTANCE_USE]|ng/mL||H|||F
 ## The reviewer console
 
 `http://localhost:52773/console/index.html` - no login, served by the container's
-own web server from a snapshot the production writes after every decision.
+own web server from snapshots the production writes after every decision.
 
-The console is deliberately read-only. A decision is already the product of a
-deterministic gate; the console exists so a privacy officer can check the queue,
-read the sentence each finding rests on, and see where the gate overrode the
-model. Recording a human review is a write, and the write API (`/consentgate/api/review`,
-IRIS login required) is kept separate from a page anyone can open.
+A React app (Vite + Tailwind, built offline, no CDN) with six pages:
+
+| Page | What it answers |
+|---|---|
+| Overview | how many requests, how many withheld, what needs a human |
+| Queue | every decision, filterable by state and searchable by MRN |
+| Decision | the scope, the run, and the verbatim sentences the gate verified |
+| Consent documents | the paperwork itself, with its provenance (`TEXT`, `EMBEDDED`, `OCR`) |
+| Message reader | the HL7 message, segment by segment, with every field annotated |
+| Gate rules | the six checks, stated as rules rather than code |
 
 ![Reviewer console](docs/console.png)
 

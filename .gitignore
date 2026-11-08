@@ -5,3 +5,6 @@ data/out/**/*.hl7
 .DS_Store
 .venv/
 console/data/*.json
+
+web/node_modules/
+web/.vite/

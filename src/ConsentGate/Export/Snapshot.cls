@@ -17,6 +17,10 @@ ClassMethod Write() As %Status
         Set sc = ..WriteFile(dir_"/decisions.json", decisions)
         If $$$ISERR(sc) Quit
         Set sc = ..WriteFile(dir_"/stats.json", ..Stats())
+        If $$$ISERR(sc) Quit
+        Set sc = ..WriteFile(dir_"/documents.json", ..Documents())
+        If $$$ISERR(sc) Quit
+        Set sc = ..WriteFile(dir_"/messages.json", ..Messages())
     } Catch ex {
         Set sc = ex.AsStatus()
     }
@@ -124,6 +128,45 @@ ClassMethod ParseArray(value As %String) As %DynamicArray
         }
     }
     Quit arr
+}
+
+
+ClassMethod Documents() As %String
+{
+    Set stmt = ##class(%SQL.Statement).%New()
+    Set sc = stmt.%Prepare("SELECT TOP 200 ID, MRN, DocType, ReceivedOn, Source, Provenance, Body FROM ConsentGate_Data.ConsentDoc ORDER BY ID DESC")
+    If $$$ISERR(sc) Quit "[]"
+    Set rs = stmt.%Execute()
+    Set out = []
+    While rs.%Next() {
+        Do out.%Push({
+            "id": (+rs.%GetData(1)),
+            "mrn": (rs.%GetData(2)),
+            "docType": (rs.%GetData(3)),
+            "receivedOn": (rs.%GetData(4)),
+            "source": (rs.%GetData(5)),
+            "provenance": (rs.%GetData(6)),
+            "body": (rs.%GetData(7))
+        })
+    }
+    Quit out.%ToJSON()
+}
+
+ClassMethod Messages() As %String
+{
+    Set out = []
+    Set path = $ZSEARCH("/home/irisowner/dev/data/samples/*.hl7")
+    While path '= "" {
+        Set stream = ##class(%Stream.FileCharacter).%New()
+        Set stream.Filename = path
+        Set text = stream.Read()
+        Do out.%Push({
+            "file": (##class(%File).GetFilename(path)),
+            "text": (text)
+        })
+        Set path = $ZSEARCH("")
+    }
+    Quit out.%ToJSON()
 }
 
 }

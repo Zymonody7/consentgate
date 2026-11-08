@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ConsentGate — one request, four artefacts</title>
+<style>
+:root{
+  --ink:#16181D; --ink-2:#4C525C; --ink-3:#8B9098;
+  --paper:#F5F4F0; --card:#FFFFFF; --line:#E4E2DB; --line-2:#D3D0C7;
+  --release:#1F6B45; --release-bg:#E8F2EC;
+  --redact:#8A5A00;  --redact-bg:#FBF0D9;
+  --escalate:#2B4C7E;--escalate-bg:#E9EFF8;
+  --amber:#8A5B12;   --amber-bg:#FBF0D9;
+  --serif:Georgia,"Times New Roman",Times,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px; --r-sm:6px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ink:#EDEAE3; --ink-2:#B7B3AA; --ink-3:#817E77;
+    --paper:#0F1114; --card:#171A1F; --line:#282C33; --line-2:#363B44;
+    --release:#8FD8B0; --release-bg:#15271E;
+    --redact:#E8BE6C;  --redact-bg:#2A2314;
+    --escalate:#A9C6EA;--escalate-bg:#172234;
+    --amber:#E3AC63;   --amber-bg:#2A2314;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:48px 28px 80px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;color:var(--ink)}
+.brand svg{width:20px;height:20px}
+.sub{color:var(--ink-3);font-size:13px;margin-top:4px}
+h1{font-family:var(--serif);font-weight:400;font-size:34px;line-height:1.15;letter-spacing:-.02em;margin:28px 0 8px}
+.lede{color:var(--ink-2);font-size:15px;max-width:70ch;margin:0 0 8px}
+.chain{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 40px}
+.chain span{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--line-2);border-radius:999px;padding:4px 10px}
+.chain b{color:var(--ink);font-weight:600}
+
+.file{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin:0 0 26px;overflow:hidden}
+.fh{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--card)}
+.fh .step{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.fh h2{margin:0;font-size:15px;font-weight:600;font-family:var(--mono)}
+.fh .kind{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--paper);border:1px solid var(--line-2);color:var(--ink-2)}
+.fh .right{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.fb{padding:6px 0}
+
+.row{display:grid;grid-template-columns:34px minmax(0,1fr) 300px;gap:0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);text-align:right;padding:14px 10px 14px 0}
+.row code{display:block;font-family:var(--mono);font-size:12.5px;line-height:1.75;padding:13px 16px;overflow-wrap:anywhere;border-left:2px solid transparent}
+.row .note{font-size:12.5px;color:var(--ink-2);padding:13px 16px;border-left:1px solid var(--line);background:var(--paper)}
+.row .note b{color:var(--ink);font-weight:600}
+.hl-rel code{background:var(--release-bg);border-left-color:var(--release)}
+.hl-wh code{background:var(--redact-bg);border-left-color:var(--redact)}
+.hl-req code{background:var(--escalate-bg);border-left-color:var(--escalate)}
+.k{font-family:var(--mono);font-size:11.5px;background:var(--paper);border:1px solid var(--line-2);border-radius:4px;padding:1px 5px}
+
+/* letter */
+.letter{padding:26px 34px;background:var(--card);font-family:var(--serif);font-size:16px;line-height:1.8;color:var(--ink)}
+.letter .head{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-family:var(--sans);margin-bottom:10px}
+.letter p{margin:0 0 14px;max-width:66ch}
+.mark{border-bottom:2px solid;padding-bottom:1px}
+.mark.g{color:var(--release);border-color:var(--release)}
+.mark.w{color:var(--redact);border-color:var(--redact)}
+.legend{display:flex;gap:18px;padding:12px 18px;border-top:1px solid var(--line);background:var(--paper);font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+/* audit */
+.audit{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.audit .cell{padding:16px 18px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.audit .cell:nth-child(2n){border-right:0}
+.audit dt{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.audit dd{margin:0;font-family:var(--mono);font-size:12.5px}
+.evq{grid-column:1 / -1;padding:16px 18px;border-bottom:0}
+.evq .q{font-family:var(--serif);font-size:15px;line-height:1.75;color:var(--ink);border-left:3px solid var(--release);padding-left:14px;margin-top:6px}
+
+.foot{margin-top:36px;color:var(--ink-3);font-size:12.5px}
+.foot code{font-family:var(--mono)}
+@media (max-width:860px){
+  .row{grid-template-columns:26px minmax(0,1fr)}
+  .row .note{grid-column:2;border-left:0;border-top:1px dashed var(--line);padding-top:10px}
+  .audit{grid-template-columns:1fr}
+  .audit .cell{border-right:0}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.6l6.4 2.6v5.2c0 4-2.7 7.3-6.4 8.6-3.7-1.3-6.4-4.6-6.4-8.6V4.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.9 10.1l2.1 2.1 4.2-4.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    ConsentGate
+  </div>
+  <div class="sub">An annotated walkthrough of one disclosure request</div>
+
+  <h1>One request, four artefacts</h1>
+  <p class="lede">This page exists because a decision is easy to describe and hard to see. Below is the
+  actual message that arrives, the consent letter it is judged against, the message that leaves,
+  and the audit row that ties them together. Field references are to HL7 v2.5.1.</p>
+
+  <div class="chain">
+    <span>① message in <b>ORU^R01</b></span>
+    <span>② consent letter <b>#1</b></span>
+    <span>③ message out <b>released</b></span>
+    <span>④ audit row <b>Decision</b></span>
+  </div>
+
+  <section class="file">
+    <div class="fh"><span class="step">01</span><h2>data/samples/001_alvarez_clinic.hl7</h2><span class="kind">inbound</span><span class="right">6 segments</span></div>
+    <div class="fb">
+      <div class="row hl-req"><span class="n">1</span><code>MSH|^~\&amp;|CITYLAB|CITY LABORATORY|ORG-CLINIC|TREATMENT|20261108090000||ORU^R01|CG0001|P|2.5.1</code>
+        <div class="note"><b>MSH-5</b> <span class="k">ORG-CLINIC</span> is the requestor; the gate later checks it against the recipient named in the consent.<br><b>MSH-6</b> <span class="k">TREATMENT</span> is the purpose of use.<br><b>MSH-10</b> <span class="k">CG0001</span> keys the audit row.</div></div>
+      <div class="row hl-req"><span class="n">2</span><code>PID|1||CG-0001||Alvarez^Maria||19710412|F</code>
+        <div class="note"><b>PID-3</b> <span class="k">CG-0001</span> is the patient identifier the workflow uses to fetch consent documents.</div></div>
+      <div class="row"><span class="n">3</span><code>OBR|1|||24323-8^Comprehensive metabolic panel|||20261108083000</code>
+        <div class="note">The order the results belong to. Not used for the decision.</div></div>
+      <div class="row hl-rel"><span class="n">4</span><code>OBX|1|NM|4548-4^Hemoglobin A1c||7.2|%|4.0-5.6|H|||F</code>
+        <div class="note"><b>OBX-3</b> LOINC <span class="k">4548-4</span> maps to category <b>GENERAL</b>.</div></div>
+      <div class="row hl-rel"><span class="n">5</span><code>OBX|2|NM|2160-0^Creatinine||1.1|mg/dL|0.6-1.2|N|||F</code>
+        <div class="note"><b>OBX-3</b> <span class="k">2160-0</span> also maps to <b>GENERAL</b>.</div></div>
+      <div class="row hl-wh"><span class="n">6</span><code>OBX|3|NM|9459-0^Ethyl glucuronide, urine||250|ng/mL||H|||F</code>
+        <div class="note"><b>OBX-3</b> <span class="k">9459-0</span> maps to <b>SUBSTANCE_USE</b> — this is the segment that will be redacted.</div></div>
+    </div>
+  </section>
+
+  <section class="file">
+    <div class="fh"><span class="step">02</span><h2>ConsentDoc #1 · scan-alvarez-auth.pdf</h2><span class="kind">paperwork</span><span class="right">provenance TEXT</span></div>
+    <div class="letter">
+      <div class="head">Authorization for release of protected health information</div>
+      <p>Patient Maria Alvarez <span class="mark g">authorizes St. Elsewhere Community Clinic to receive
+      laboratory results related to diabetes and kidney function for the purpose of continuing care</span>.
+      <span class="mark w">This authorization does not extend to records of substance use disorder
+      treatment</span>, which are not authorised for release under this form. Effective 2026-10-02,
+      expires 2027-10-02.</p>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--release)"></i>supports a grant of GENERAL</span>
+      <span><i style="background:var(--redact)"></i>supports a denial of SUBSTANCE_USE</span>
+    </div>
+  </section>
+
+  <section class="file">
+    <div class="fh"><span class="step">03</span><h2>data/out/released_CG0001.hl7</h2><span class="kind">outbound</span><span class="right">same message, one value changed</span></div>
+    <div class="fb">
+      <div class="row"><span class="n">1</span><code>MSH|^~\&amp;|CITYLAB|CITY LABORATORY|ORG-CLINIC|TREATMENT|20261108090000||ORU^R01|CG0001|P|2.5.1</code><div class="note">Unchanged.</div></div>
+      <div class="row"><span class="n">2</span><code>PID|1||CG-0001||Alvarez^Maria||19710412|F</code><div class="note">Unchanged.</div></div>
+      <div class="row"><span class="n">3</span><code>OBR|1|||24323-8^Comprehensive metabolic panel|||20261108083000</code><div class="note">Unchanged.</div></div>
+      <div class="row hl-rel"><span class="n">4</span><code>OBX|1|NM|4548-4^Hemoglobin A1c||7.2|%|4.0-5.6|H|||F</code><div class="note">Released.</div></div>
+      <div class="row hl-rel"><span class="n">5</span><code>OBX|2|NM|2160-0^Creatinine||1.1|mg/dL|0.6-1.2|N|||F</code><div class="note">Released.</div></div>
+      <div class="row hl-wh"><span class="n">6</span><code>OBX|3|NM|9459-0^Ethyl glucuronide, urine||[WITHHELD: SUBSTANCE_USE]|ng/mL||H|||F</code>
+        <div class="note">The <b>value</b> is replaced; the segment, its position and its units stay. The recipient can see that something was withheld, not what it was.</div></div>
+    </div>
+  </section>
+
+  <section class="file">
+    <div class="fh"><span class="step">04</span><h2>ConsentGate_Data.Decision</h2><span class="kind">audit</span><span class="right">one row per request</span></div>
+    <dl class="audit" style="margin:0">
+      <div class="cell"><dt>Request</dt><dd>CG9001</dd></div>
+      <div class="cell"><dt>Patient</dt><dd>CG-0001</dd></div>
+      <div class="cell"><dt>Decision</dt><dd>REDACT · gate PASS</dd></div>
+      <div class="cell"><dt>Scope</dt><dd>released ["GENERAL"] · withheld ["SUBSTANCE_USE"]</dd></div>
+      <div class="cell"><dt>Run</dt><dd>deepseek-flash · 6131 ms · conf 0.94</dd></div>
+      <div class="cell"><dt>Untrusted payload</dt><dd>1 (instruction-like text in MSH-6)</dd></div>
+      <div class="evq">
+        <dt>Evidence — verified against document #1</dt>
+        <dd class="q">“Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory
+        results related to diabetes and kidney function for the purpose of continuing care.”</dd>
+        <dt style="margin-top:14px">Evidence — verified against document #1</dt>
+        <dd class="q" style="border-left-color:var(--redact)">“This authorization does not extend to records of
+        substance use disorder treatment”</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="file">
+    <div class="fh"><span class="step">05</span><h2>data/samples/007_attachment.hl7</h2><span class="kind">paperwork inside the message</span><span class="right">OBX value type ED</span></div>
+    <div class="fb">
+      <div class="row"><span class="n">5</span><code>OBX|2|ED|AUTH^Authorization||PDF^PDF^AUTH^Base64^QVVUSE9SSVpBVElPTiBGT1IgUkVMRUFTRSBPRiBQUk9URUNURUQgSEVBTFRIIElORk9STUFUSU9OLiBQY…</code>
+        <div class="note"><b>OBX-2</b> <span class="k">ED</span> = encapsulated data. The value is
+        <span class="k">source^type^subtype^encoding^payload</span>: a PDF, base64. The production decodes it,
+        stores it as document #9 with <b>provenance EMBEDDED</b>, and the agent cites it in the same decision.</div></div>
+    </div>
+  </section>
+
+  <p class="foot">Reproduce all of this with <code>./scripts/demo.sh 001</code> and
+  <code>./scripts/demo.sh 007</code>. The consent letters themselves live in
+  <code>ConsentGate_Data.ConsentDoc</code>; the field-by-field mapping from LOINC to consent category is in
+  <code>ConsentGate.Data.CodeMap</code>.</p>
+</div>
+</body>
+</html>
