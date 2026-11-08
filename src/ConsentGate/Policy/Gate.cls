@@ -23,6 +23,14 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
     Set result.gate = "PASS"
 
     // --- 1. Parse ------------------------------------------------------
+    // Tolerate a model that wraps the object in prose or a markdown fence:
+    // keep only the outermost {...} before parsing.
+    Set p1 = $FIND(agentRaw, "{")
+    If p1 > 0 {
+        // Position of the last "}" is the first "}" in the reversed string.
+        Set p2 = $LENGTH(agentRaw) - $FIND($REVERSE(agentRaw), "}") + 2
+        If (p2 > 0) && (p2 >= p1) Set agentRaw = $EXTRACT(agentRaw, p1 - 1, p2)
+    }
     Set parsed = ""
     Try {
         Set parsed = ##class(%DynamicAbstractObject).%FromJSON(agentRaw)
@@ -42,6 +50,7 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
 
     Set result.rationale = parsed.rationale
     Set result.confidence = +parsed.confidence
+    Set result.decision = $ZCONVERT(parsed.decision, "U")
 
     // --- 2. Verify every cited quote against its document --------------
     Set evidence = parsed.evidence
@@ -104,6 +113,13 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
         Set i = 0
         While i < parsed.release.%Size() {
             Do release.%Push(parsed.release.%Get(i))
+            Set i = i + 1
+        }
+    }
+    If $IsObject(parsed.withhold) {
+        Set i = 0
+        While i < parsed.withhold.%Size() {
+            Do withhold.%Push(parsed.withhold.%Get(i))
             Set i = i + 1
         }
     }
@@ -181,11 +197,12 @@ ClassMethod CategoryBlocker(mrn As %String, category As %String) As %String
 
 ClassMethod HasDocType(mrn As %String, docType As %String) As %Boolean
 {
+    Set found = 0
     Set rs = ##class(ConsentGate.Data.ConsentDoc).ForMRN(mrn)
     While rs.%Next() {
-        If rs.DocType = docType Quit 1
+        If rs.DocType = docType Set found = 1
     }
-    Quit 0
+    Quit found
 }
 
 ClassMethod LatestDocIsRevocation(mrn As %String) As %Boolean
@@ -209,22 +226,24 @@ ClassMethod IsKnownDecision(v As %String) As %Boolean
 
 ClassMethod HasVerified(verified As %DynamicArray) As %Boolean
 {
+    Set found = 0
     Set i = 0
     While i < verified.%Size() {
-        If verified.%Get(i).verified = 1 Quit 1
+        If verified.%Get(i).verified = 1 Set found = 1
         Set i = i + 1
     }
-    Quit 0
+    Quit found
 }
 
 ClassMethod InArray(arr As %DynamicArray, value As %String) As %Boolean
 {
+    Set found = 0
     Set i = 0
     While i < arr.%Size() {
-        If arr.%Get(i) = value Quit 1
+        If arr.%Get(i) = value Set found = 1
         Set i = i + 1
     }
-    Quit 0
+    Quit found
 }
 
 ClassMethod Remove(arr As %DynamicArray, value As %String) As %DynamicArray

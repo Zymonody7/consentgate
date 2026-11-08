@@ -27,7 +27,7 @@ obligation attached. That is why the model is not allowed the last word.
    data/in/*.hl7
         │   HL7 v2.5.1 ORU^R01
         ▼
-  EnsLib.HL7.Service.FileService
+  EnsLib.File.PassthroughService
         │
         ▼
   ConsentGate.BP.Disclosure ──────────────────────────────┐
@@ -50,9 +50,9 @@ obligation attached. That is why the model is not allowed the last word.
         │      · DENIED / expired categories are withheld  │
         │      · low confidence or no evidence → escalate  │
         │                                                  ▼
-        ├──► data/out/released_*.hl7   (RELEASE / REDACT)
-        ├──► data/out/escalated/*.hl7  (human review)
-        ├──► data/out/denied/*.hl7     (DENY)
+        ├──► data/out/released_<msgid>.hl7   (RELEASE / REDACT)
+        ├──► data/out/escalated/*.hl7      (human review)
+        ├──► data/out/denied/*.hl7         (DENY)
         └──► ConsentGate_Data.Decision (audit row, every time)
 ```
 
@@ -98,7 +98,7 @@ Open the management portal at <http://localhost:52773/csp/sys/UtilHome.csp>
 ```bash
 cp data/samples/001_alvarez_clinic.hl7 data/in/
 sleep 5
-cat data/out/released_001_alvarez_clinic.hl7
+cat data/out/released_CG0001.hl7
 ```
 
 The OBX for ethyl glucuronide comes out as `[WITHHELD: SUBSTANCE_USE]`; the
@@ -150,6 +150,13 @@ if the sentence it cites is not in the document, the recommendation is not acted
 the agent's proposed release list, then removes anything a hard rule forbids. The
 stored `GateResult` records whether that happened (`PASS` or `OVERRIDDEN`), so
 override rates are measurable rather than invisible.
+
+**Why parse HL7 as text instead of using the HL7 schema classes?** The community
+IRIS for Health image does not ship the licensed v2 schema tables (`^EnsHL7` is
+empty), so `EnsLib.HL7.Message.GetValueAt` returns nothing on that image. A gate
+that decides what may be disclosed should not depend on a licensed schema library
+being installed. The production still runs as a real Interoperability production;
+only the segment parsing is ours.
 
 **Why Interoperability rather than a sidecar service?** The redaction has to happen
 to the actual HL7 message, with the production's retry, queueing and error

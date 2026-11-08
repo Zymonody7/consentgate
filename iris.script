@@ -3,33 +3,23 @@
     // Dev convenience only. Comment out for production use.
     do ##class(Security.Users).UnExpireUserPasswords("*")
 
-    // Bootstrap IPM (ZPM) if the image does not already have it.
-    set tURL = "https://pm.community.intersystems.com/packages/zpm/latest/installer"
-    set r = ##class(%Net.HttpRequest).%New()
-    set r.Server = "pm.community.intersystems.com"
-    set r.SSLConfiguration = "ISC.FeatureTracker.SSL.Config"
-    do r.Get("/packages/zpm/latest/installer")
-    do $system.OBJ.LoadStream(r.HttpResponse.Data,"c")
-
-    do ##class(Security.Services).Get("%Service_CallIn",.prop)
-    set prop("Enabled")=1
-    set prop("AutheEnabled")=48
-    do ##class(Security.Services).Modify("%Service_CallIn",.prop)
-
-    zpm "enable -community"
-
     zn "CONSENTGATE"
-    zpm "load /home/irisowner/dev/ -v":1:1
 
-    // ToolSet specs are resolved at compile time; compile the agent last so the
-    // toolset it references is already built.
-    do $system.OBJ.Compile("ConsentGate.Agent.ConsentTools","ck")
-    do $system.OBJ.Compile("ConsentGate.Agent.ConsentAgent","ck")
+    // Load without compiling, then compile the package, then the toolset and
+    // the agent last: tool specifications resolve at compile time.
+    do $System.OBJ.LoadDir("/home/irisowner/dev/src", "k", .err, 1)
+    zwrite err
+    do $System.OBJ.CompilePackage("ConsentGate", "ck")
+    do $System.OBJ.Compile("ConsentGate.Agent.ConsentTools", "ck")
+    do $System.OBJ.Compile("ConsentGate.Agent.ConsentAgent", "ck")
 
     // Seed synthetic patients, consent documents and requestors.
     do ##class(ConsentGate.Setup).Seed()
 
     // Start the production so the file service is watching ./data/in.
     do ##class(ConsentGate.Setup).StartProduction()
+
+    // Bring it back up when the container restarts.
+    Set ^Ens.AutoStart = "ConsentGate.Production"
 
     halt

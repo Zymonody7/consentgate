@@ -1,39 +1,65 @@
 /// The heart of the workflow: receives an HL7 ORU^R01 disclosure request,
 /// asks the agent for a recommendation, runs it through the deterministic
 /// gate, redacts what may not leave, routes the result, and audits everything.
+///
+/// The message is handled as HL7 v2 text rather than through the HL7 schema
+/// classes: the community IRIS for Health image does not ship the v2 schema
+/// tables, and a disclosure gate should not depend on a licensed schema
+/// library to decide what may be released.
 Class ConsentGate.BP.Disclosure Extends Ens.BusinessProcess
 {
 
-Method OnRequest(pRequest As EnsLib.HL7.Message, Output pResponse As Ens.Response) As %Status
+Method OnRequest(pRequest As Ens.StreamContainer, Output pResponse As Ens.Response) As %Status
 {
     Set tSC = $$$OK
     Set started = $ZHOROLOG
     Try {
-        Set mrn = pRequest.GetValueAt("PID:3.1")
-        Set org = pRequest.GetValueAt("MSH:5")
-        Set purpose = pRequest.GetValueAt("MSH:6")
-        Set reqId = pRequest.GetValueAt("MSH:10")
+        Set text = ..ReadText(pRequest)
+        If text = "" {
+            Set tSC = $$$ERROR($$$GeneralError, "Empty message")
+            Quit
+        }
+
+        // --- Envelope fields -------------------------------------------
+        Set mrn = ""
+        Set org = ""
+        Set purpose = ""
+        Set reqId = ""
+        Set cr = $CHAR(13)
+        Set n = $LENGTH(text, cr)
+        Set i = 0
+        While i < n {
+            Set seg = $PIECE(text, cr, i + 1)
+            Set segId = $PIECE(seg, "|", 1)
+            If segId = "MSH" {
+                Set org = $PIECE(seg, "|", 5)
+                Set purpose = $PIECE(seg, "|", 6)
+                Set reqId = $PIECE(seg, "|", 10)
+            }
+            If segId = "PID" Set mrn = $PIECE(seg, "|", 4)
+            Set i = i + 1
+        }
 
         If mrn = "" {
-            Set tSC = $$$ERROR($$$GeneralError, "No patient identifier in PID:3")
+            Set tSC = $$$ERROR($$$GeneralError, "No patient identifier in PID-3")
             Quit
         }
 
         // --- Which consent categories does this message contain? -------
-        Set catsSeen = {}
-        Set requested = []
-        Set i = 1
-        Set code = "x"
-        While (i <= 500) && (code '= "") {
-            Set code = pRequest.GetValueAt("OBXgrp("_i_"):OBX:3.1")
-            If code '= "" {
+        Set catsSeen = ##class(%DynamicObject).%New()
+        Set requested = ##class(%DynamicArray).%New()
+        Set i = 0
+        While i < n {
+            Set seg = $PIECE(text, cr, i + 1)
+            If $PIECE(seg, "|", 1) = "OBX" {
+                Set code = $PIECE($PIECE(seg, "|", 4), "^", 1)
                 Set cat = ##class(ConsentGate.Data.CodeMap).CategoryOf(code)
                 If catsSeen.%Get(cat) = "" {
                     Do catsSeen.%Set(cat, 1)
                     Do requested.%Push(cat)
                 }
-                Set i = i + 1
             }
+            Set i = i + 1
         }
         If requested.%Size() = 0 Do requested.%Push("GENERAL")
 
@@ -59,25 +85,27 @@ Method OnRequest(pRequest As EnsLib.HL7.Message, Output pResponse As Ens.Respons
         Set rec.Model = $System.Util.GetEnviron("CONSENTGATE_MODEL")
         Set rec.GateResult = verdict.gate
         Set rec.LatencyMs = ($ZHOROLOG - started) * 1000 \ 1
-        Set rec.CreatedAt = $ZDATE($HOROLOG, 3)_" "_$ZTIME($PIECE($HOROLOG,",",2), 1)
+        Set rec.CreatedAt = $ZDATE($HOROLOG, 3)_" "_$ZTIME($PIECE($HOROLOG, ",", 2), 1)
         Do rec.%Save()
 
         $$$LOGINFO("ConsentGate "_reqId_" mrn="_mrn_" decision="_decision_" gate="_verdict.gate)
 
         // --- Apply the decision to the message -------------------------
+        Set outText = text
         If decision = "REDACT" {
-            Do ..Redact(pRequest, verdict.withhold)
+            Set outText = ..RedactText(text, verdict.withhold)
         }
 
         // --- Route ------------------------------------------------------
-        Set out = ""
-        If decision = "ESCALATE" {
-            Set tSC = ..SendRequestSync("Escalate", pRequest, .out)
-        } ElseIf decision = "DENY" {
-            Set tSC = ..SendRequestSync("Deny", pRequest, .out)
-        } Else {
-            Set tSC = ..SendRequestSync("Archive", pRequest, .out)
-        }
+        Set out = ##class(Ens.StreamContainer).%New()
+        Set out.Stream = ##class(%Stream.GlobalCharacter).%New()
+        Do out.Stream.Write(outText)
+        Do out.Attributes.SetAt(reqId_".hl7", "Filename")
+
+        Set target = "Archive"
+        If decision = "ESCALATE" Set target = "Escalate"
+        If decision = "DENY" Set target = "Deny"
+        Set tSC = ..SendRequestSync(target, out, .pResponse)
     } Catch ex {
         Set tSC = ex.AsStatus()
         $$$LOGERROR("ConsentGate failed: "_$System.Status.GetErrorText(tSC))
@@ -85,23 +113,36 @@ Method OnRequest(pRequest As EnsLib.HL7.Message, Output pResponse As Ens.Respons
     Quit tSC
 }
 
-/// Blank the value of every observation whose category may not be disclosed.
-/// The segment itself stays so the recipient can see that something was withheld.
-ClassMethod Redact(msg As EnsLib.HL7.Message, withhold As %DynamicArray) As %Status
+ClassMethod ReadText(pRequest As Ens.StreamContainer) As %String
 {
-    Set i = 1
-    Set code = "x"
-    While (i <= 500) && (code '= "") {
-        Set code = msg.GetValueAt("OBXgrp("_i_"):OBX:3.1")
-        If code '= "" {
+    Set stream = pRequest.Stream
+    If '$IsObject(stream) Quit ""
+    Do stream.Rewind()
+    Quit stream.Read(stream.Size)
+}
+
+/// Blank the value of every observation whose category may not be disclosed.
+/// The segment stays, so the recipient can see that something was withheld.
+ClassMethod RedactText(text As %String, withhold As %DynamicArray) As %String
+{
+    Set cr = $CHAR(13)
+    Set n = $LENGTH(text, cr)
+    Set out = ""
+    Set i = 0
+    While i < n {
+        Set seg = $PIECE(text, cr, i + 1)
+        If $PIECE(seg, "|", 1) = "OBX" {
+            Set code = $PIECE($PIECE(seg, "|", 4), "^", 1)
             Set cat = ##class(ConsentGate.Data.CodeMap).CategoryOf(code)
             If ##class(ConsentGate.Policy.Gate).InArray(withhold, cat) {
-                Do msg.SetValueAt("[WITHHELD: "_cat_"]", "OBXgrp("_i_"):OBX:5.1")
+                Set seg = $PIECE(seg, "|", 1, 5) _ "|" _ "[WITHHELD: "_cat_"]" _ "|" _ $PIECE(seg, "|", 7, 999)
             }
-            Set i = i + 1
         }
+        Set out = out _ seg
+        If (i + 1) < n Set out = out _ cr
+        Set i = i + 1
     }
-    Quit $$$OK
+    Quit out
 }
 
 ClassMethod RunAgent(mrn As %String, org As %String, purpose As %String, requested As %DynamicArray) As %String
