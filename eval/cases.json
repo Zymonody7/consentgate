@@ -1,0 +1,233 @@
+[
+  {
+    "id": "c01",
+    "label": "honest extraction, category excluded",
+    "mrn": "CG-0001",
+    "categories": [
+      "GENERAL",
+      "SUBSTANCE_USE"
+    ],
+    "expectDecision": "REDACT",
+    "expectWithheld": [
+      "SUBSTANCE_USE"
+    ],
+    "findings": [
+      {
+        "docRef": "CG-0001:AUTHORIZATION:diabetes and kidney function",
+        "category": "GENERAL",
+        "effect": "GRANT",
+        "recipient": "ORG-CLINIC",
+        "validUntil": "2027-10-02",
+        "quote": "Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory results related to diabetes and kidney function"
+      },
+      {
+        "docRef": "CG-0001:AUTHORIZATION:diabetes and kidney function",
+        "category": "SUBSTANCE_USE",
+        "effect": "DENY",
+        "quote": "This authorization does not extend to records of substance use disorder treatment"
+      }
+    ]
+  },
+  {
+    "id": "c02",
+    "label": "fabricated quote is rejected",
+    "mrn": "CG-0001",
+    "categories": [
+      "GENERAL",
+      "SUBSTANCE_USE"
+    ],
+    "expectDecision": "ESCALATE",
+    "expectWithheld": [],
+    "findings": [
+      {
+        "docRef": "CG-0001:AUTHORIZATION:diabetes and kidney function",
+        "category": "GENERAL",
+        "effect": "GRANT",
+        "quote": "The patient authorizes release of all records including substance use"
+      },
+      {
+        "docRef": "CG-0001:AUTHORIZATION:diabetes and kidney function",
+        "category": "SUBSTANCE_USE",
+        "effect": "GRANT",
+        "quote": "Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory results related to diabetes and kidney function"
+      }
+    ]
+  },
+  {
+    "id": "c03",
+    "label": "real quote, wrong category",
+    "mrn": "CG-0001",
+    "categories": [
+      "GENERAL",
+      "SUBSTANCE_USE"
+    ],
+    "expectDecision": "ESCALATE",
+    "expectWithheld": [],
+    "findings": [
+      {
+        "docRef": "CG-0001:AUTHORIZATION:diabetes and kidney function",
+        "category": "SUBSTANCE_USE",
+        "effect": "GRANT",
+        "quote": "Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory results related to diabetes and kidney function"
+      }
+    ]
+  },
+  {
+    "id": "c04",
+    "label": "revocation voids an otherwise valid grant",
+    "mrn": "CG-0002",
+    "categories": [
+      "GENERAL"
+    ],
+    "expectDecision": "DENY",
+    "expectWithheld": [
+      "GENERAL"
+    ],
+    "findings": [
+      {
+        "docRef": "CG-0002:AUTHORIZATION:David Chen authorizes",
+        "category": "GENERAL",
+        "effect": "GRANT",
+        "recipient": "ORG-CLINIC",
+        "validUntil": "2027-09-14",
+        "quote": "Patient David Chen authorizes release of laboratory results to St. Elsewhere Community Clinic for treatment purposes"
+      }
+    ]
+  },
+  {
+    "id": "c05",
+    "label": "expired instrument is void",
+    "mrn": "CG-0005",
+    "categories": [
+      "GENERAL"
+    ],
+    "expectDecision": "ESCALATE",
+    "expectWithheld": [],
+    "findings": [
+      {
+        "docRef": "CG-0005:AUTHORIZATION:Lena Park",
+        "category": "GENERAL",
+        "effect": "GRANT",
+        "recipient": "ORG-CLINIC",
+        "validUntil": "2025-01-10",
+        "quote": "Patient Lena Park authorizes release of laboratory results to St. Elsewhere Community Clinic for treatment purposes"
+      }
+    ]
+  },
+  {
+    "id": "c06",
+    "label": "Part 2 grant to this clinic releases substance use",
+    "mrn": "CG-0003",
+    "categories": [
+      "GENERAL",
+      "SUBSTANCE_USE",
+      "HIV"
+    ],
+    "expectDecision": "REDACT",
+    "expectWithheld": [
+      "HIV"
+    ],
+    "findings": [
+      {
+        "docRef": "CG-0003:AUTHORIZATION:Aisha Bello authorizes",
+        "category": "GENERAL",
+        "effect": "GRANT",
+        "recipient": "ORG-CLINIC",
+        "validUntil": "2027-08-30",
+        "quote": "Patient Aisha Bello authorizes St. Elsewhere Community Clinic to receive laboratory results for the purpose of continuing care"
+      },
+      {
+        "docRef": "CG-0003:PART2_CONSENT:substance use disorder treatment records",
+        "category": "SUBSTANCE_USE",
+        "effect": "GRANT",
+        "recipient": "ORG-CLINIC",
+        "validUntil": "2027-08-30",
+        "quote": "Patient Aisha Bello consents to disclosure of substance use disorder treatment records to St. Elsewhere Community Clinic only"
+      },
+      {
+        "docRef": "CG-0003:AUTHORIZATION:declined, in writing",
+        "category": "HIV",
+        "effect": "DENY",
+        "quote": "declined, in writing, the release of HIV-related laboratory results"
+      }
+    ]
+  },
+  {
+    "id": "c07",
+    "label": "Part 2 grant naming another recipient is void",
+    "mrn": "CG-0003",
+    "categories": [
+      "SUBSTANCE_USE"
+    ],
+    "expectDecision": "ESCALATE",
+    "expectWithheld": [],
+    "findings": [
+      {
+        "docRef": "CG-0003:PART2_CONSENT:substance use disorder treatment records",
+        "category": "SUBSTANCE_USE",
+        "effect": "GRANT",
+        "recipient": "ORG-REGISTRY",
+        "validUntil": "2027-08-30",
+        "quote": "Patient Aisha Bello consents to disclosure of substance use disorder treatment records to St. Elsewhere Community Clinic only"
+      }
+    ]
+  },
+  {
+    "id": "c08",
+    "label": "contradictory findings are not a decision",
+    "mrn": "CG-0001",
+    "categories": [
+      "GENERAL"
+    ],
+    "expectDecision": "ESCALATE",
+    "expectWithheld": [],
+    "findings": [
+      {
+        "docRef": "CG-0001:AUTHORIZATION:diabetes and kidney function",
+        "category": "GENERAL",
+        "effect": "GRANT",
+        "recipient": "ORG-CLINIC",
+        "validUntil": "2027-10-02",
+        "quote": "Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory results related to diabetes and kidney function"
+      },
+      {
+        "docRef": "CG-0001:AUTHORIZATION:diabetes and kidney function",
+        "category": "GENERAL",
+        "effect": "DENY",
+        "quote": "This authorization does not extend to records of substance use disorder treatment"
+      }
+    ]
+  },
+  {
+    "id": "c09",
+    "label": "silence is not permission",
+    "mrn": "CG-0004",
+    "categories": [
+      "GENERAL",
+      "GENETIC"
+    ],
+    "expectDecision": "ESCALATE",
+    "expectWithheld": [],
+    "findings": []
+  },
+  {
+    "id": "c10",
+    "label": "court order covers the genetic finding it names",
+    "mrn": "CG-0004",
+    "categories": [
+      "GENETIC"
+    ],
+    "expectDecision": "RELEASE",
+    "expectWithheld": [],
+    "findings": [
+      {
+        "docRef": "CG-0004:COURT_ORDER:BRCA1 genetic test result",
+        "category": "GENETIC",
+        "effect": "GRANT",
+        "recipient": "ORG-REGISTRY",
+        "quote": "The court orders the custodian to disclose the patient's BRCA1 genetic test result to the State Public Health Registry"
+      }
+    ],
+    "requestor": "ORG-REGISTRY"
+  }
+]

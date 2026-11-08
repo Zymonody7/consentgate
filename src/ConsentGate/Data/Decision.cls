@@ -8,9 +8,9 @@ Property RequestID As %String(MAXLEN = 64);
 
 Property MRN As %String(MAXLEN = 32);
 
-Property RequestorOrg As %String(MAXLEN = 64);
+Property RequestorOrg As %String(MAXLEN = 128);
 
-Property PurposeOfUse As %String(MAXLEN = 32);
+Property PurposeOfUse As %String(MAXLEN = 128);
 
 /// RELEASE | REDACT | DENY | ESCALATE
 Property Decision As %String(MAXLEN = 16);

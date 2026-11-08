@@ -95,7 +95,10 @@ Method OnRequest(pRequest As Ens.StreamContainer, Output pResponse As Ens.Respon
         Set rec.InjectionFlag = injection
         Set rec.LatencyMs = ($ZHOROLOG - started) * 1000 \ 1
         Set rec.CreatedAt = $ZDATE($HOROLOG, 3)_" "_$ZTIME($PIECE($HOROLOG, ",", 2), 1)
-        Do rec.%Save()
+        Set saveSC = rec.%Save()
+        If $$$ISERR(saveSC) {
+            $$$LOGERROR("ConsentGate could not write the audit row: "_$System.Status.GetErrorText(saveSC))
+        }
 
         $$$LOGINFO("ConsentGate "_reqId_" mrn="_mrn_" decision="_decision_" gate="_verdict.gate)
 
