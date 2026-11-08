@@ -56,8 +56,11 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
     }
 
     // --- 2. Verify each finding ----------------------------------------
-    Set granted = {}
-    Set denied = {}
+    // Latest instrument wins per category. Two findings dated the same day that
+    // disagree are a real contradiction and escalate; a grant followed by a
+    // later denial is simply an override.
+    Set latestEff = {}
+    Set latestDate = {}
     Set verifiedCount = 0
     Set conflicted = 0
     Set today = $ZDATE($HOROLOG, 3)
@@ -74,6 +77,7 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
 
         Set ok = 0
         Set why = ""
+        Set docDate = ""
 
         If (docId = "") || (quote = "") || (category = "") {
             Set why = "incomplete finding"
@@ -91,16 +95,20 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
                 Set why = "instrument names a different recipient ("_recipient_")"
             } Else {
                 Set ok = 1
+                Set docDate = doc.ReceivedOn
             }
         }
 
         If ok {
             Set verifiedCount = verifiedCount + 1
             Do result.evidence.%Push({"docId": (docId), "category": (category), "effect": (effect), "quote": (quote), "verified": (1)})
-            If effect = "DENY" {
-                Do denied.%Set(category, 1)
-            } Else {
-                Do granted.%Set(category, 1)
+
+            Set prior = latestDate.%Get(category)
+            If (prior = "") || (docDate > prior) {
+                Do latestDate.%Set(category, docDate)
+                Do latestEff.%Set(category, effect)
+            } ElseIf (docDate = prior) && (effect '= latestEff.%Get(category)) {
+                Set conflicted = 1
             }
         } Else {
             Do result.notes.%Push(category_" finding rejected: "_why)
@@ -115,15 +123,8 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
         Quit result
     }
 
-    // Conflicting findings are not a decision.
-    Set j = 0
-    While j < requested.%Size() {
-        Set cat = requested.%Get(j)
-        If (granted.%Get(cat) = 1) && (denied.%Get(cat) = 1) Set conflicted = 1
-        Set j = j + 1
-    }
     If conflicted {
-        Do result.notes.%Push("Agent reported both a grant and a denial for the same category; escalated.")
+        Do result.notes.%Push("Two findings dated the same day disagree; escalated.")
         Set result.gate = "OVERRIDDEN"
         Quit result
     }
@@ -144,19 +145,17 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
 
     // 42 CFR Part 2: substance use records need a Part 2 consent, whatever
     // the extraction says.
-    If '..HasDocType(mrn, "PART2_CONSENT") {
-        If granted.%Get("SUBSTANCE_USE") = 1 {
-            Do granted.%Set("SUBSTANCE_USE", "")
-            Do result.notes.%Push("SUBSTANCE_USE withheld by gate: no 42 CFR Part 2 consent on file.")
-            Set result.gate = "OVERRIDDEN"
-        }
+    If (latestEff.%Get("SUBSTANCE_USE") = "GRANT") && '..HasDocType(mrn, "PART2_CONSENT") {
+        Do latestEff.%Set("SUBSTANCE_USE", "DENY")
+        Do result.notes.%Push("SUBSTANCE_USE withheld by gate: no 42 CFR Part 2 consent on file.")
+        Set result.gate = "OVERRIDDEN"
     }
 
     // --- 4. Decide from the permitted set, not from the model's prose ----
     Set i = 0
     While i < requested.%Size() {
         Set cat = requested.%Get(i)
-        If (granted.%Get(cat) = 1) && (denied.%Get(cat) '= 1) {
+        If latestEff.%Get(cat) = "GRANT" {
             Do result.release.%Push(cat)
         } Else {
             Do result.withhold.%Push(cat)

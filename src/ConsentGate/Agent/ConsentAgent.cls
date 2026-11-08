@@ -6,7 +6,7 @@ Class ConsentGate.Agent.ConsentAgent Extends %AI.Agent
 /// Provider is resolved at runtime from the environment (see %OnInit).
 Parameter TOOLSETS = "ConsentGate.Agent.ConsentTools";
 
-Parameter MODEL = "gpt-4o-mini";
+Parameter MODEL = "deepseek-chat";
 
 XData INSTRUCTIONS [ MimeType = text/markdown ]
 {
@@ -68,13 +68,9 @@ Method %OnInit() As %Status
     Set provider = $System.Util.GetEnviron("CONSENTGATE_PROVIDER")
     If provider = "" Set provider = "openai"
 
-    If provider = "anthropic" {
-        Set key = $System.Util.GetEnviron("ANTHROPIC_API_KEY")
-    } ElseIf provider = "openai" {
-        Set key = $System.Util.GetEnviron("OPENAI_API_KEY")
-    } Else {
-        Set key = $System.Util.GetEnviron("CONSENTGATE_API_KEY")
-    }
+    // Each provider is configured by <PROVIDER>_API_KEY, e.g. DEEPSEEK_API_KEY.
+    Set key = $System.Util.GetEnviron($ZCONVERT(provider, "U")_"_API_KEY")
+    If key = "" Set key = $System.Util.GetEnviron("CONSENTGATE_API_KEY")
 
     If key = "" Quit $$$ERROR($$$GeneralError, "No API key set for provider "_provider)
 
