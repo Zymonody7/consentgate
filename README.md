@@ -18,6 +18,12 @@ the governing rules, and computes the disclosure itself.
 
 ---
 
+## Links
+
+- Open Exchange package: <https://openexchange.intersystems.com/package/consentgate>
+- Contest entry: <https://openexchange.intersystems.com/contest/49>
+- Repository: <https://github.com/Zymonody7/consentgate>
+
 ## Quick start
 
 ```bash
