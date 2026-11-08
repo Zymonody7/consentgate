@@ -1,39 +1,41 @@
-/// Deterministic policy gate. The agent proposes; this class disposes.
+/// Deterministic decision layer: the model never chooses, it only reads.
 ///
-/// The gate re-checks three things the model cannot be trusted with:
-///   1. that every quote it cited actually appears in the document it cites
-///   2. that a later revocation really overrides an earlier authorisation
-///   3. that protected categories (42 CFR Part 2, denied HIV/genetic) are not
-///      released on the strength of an authorisation that does not cover them
+/// The agent's job is to extract findings from consent documents - each finding
+/// names a category, an effect, a recipient, a validity date and the verbatim
+/// sentence that supports it. This class turns those findings into a decision:
 ///
-/// Anything it cannot settle is escalated to a human, never guessed.
+///   1. every quote must literally appear in the document it cites
+///   2. the quote must also contain language that speaks to that category
+///   3. a finding whose recipient or validity does not cover this request is void
+///   4. a later revocation voids every grant
+///   5. anything the model did not affirmatively establish is withheld
+///
+/// The model's own "decision" field, if it sends one, is ignored entirely.
 Class ConsentGate.Policy.Gate Extends %RegisteredObject
 {
 
 ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %DynamicArray, agentRaw As %String) As %DynamicObject
 {
     Set result = {}
-    Set result.rationale = ""
-    Set result.confidence = 0
-    Set result.evidence = []
     Set result.notes = []
-    Set result.decision = "ESCALATE"
+    Set result.evidence = []
     Set result.release = []
     Set result.withhold = []
+    Set result.decision = "ESCALATE"
     Set result.gate = "PASS"
+    Set result.rationale = ""
+    Set result.confidence = 0
 
     // --- 1. Parse ------------------------------------------------------
-    // Tolerate a model that wraps the object in prose or a markdown fence:
-    // keep only the outermost {...} before parsing.
+    // Tolerate prose or a markdown fence around the JSON object.
     Set p1 = $FIND(agentRaw, "{")
     If p1 > 0 {
-        // Position of the last "}" is the first "}" in the reversed string.
         Set p2 = $LENGTH(agentRaw) - $FIND($REVERSE(agentRaw), "}") + 2
         If (p2 > 0) && (p2 >= p1) Set agentRaw = $EXTRACT(agentRaw, p1 - 1, p2)
     }
     Set parsed = ""
     Try {
-        Set parsed = ##class(%DynamicAbstractObject).%FromJSON(agentRaw)
+        Set parsed = ##class(%DynamicObject).%FromJSON(agentRaw)
     } Catch {
         Set parsed = ""
     }
@@ -42,125 +44,128 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
         Do result.notes.%Push("Agent output was not valid JSON; escalated without acting on it.")
         Quit result
     }
-    If (parsed.decision = "") || ('..IsKnownDecision(parsed.decision)) {
-        Set result.gate = "UNPARSEABLE"
-        Do result.notes.%Push("Agent returned an unknown decision value; escalated.")
-        Quit result
-    }
 
     Set result.rationale = parsed.rationale
     Set result.confidence = +parsed.confidence
-    Set result.decision = $ZCONVERT(parsed.decision, "U")
 
-    // --- 2. Verify every cited quote against its document --------------
-    Set evidence = parsed.evidence
-    Set verified = []
-    Set evidenceOk = 1
-    If $IsObject(evidence) {
-        Set i = 0
-        While (i < evidence.%Size()) && evidenceOk {
-            Set item = evidence.%Get(i)
-            Set docId = item.docId
-            Set quote = item.quote
-            Set ok = 0
-            If (docId '= "") && (quote '= "") {
-                Set doc = ##class(ConsentGate.Data.ConsentDoc).%OpenId(docId)
-                If $IsObject(doc) {
-                    If $FIND(doc.Body, quote) > 0 Set ok = 1
-                }
-            }
-            If ok {
-                Do verified.%Push({"docId": (docId), "quote": (quote), "verified": (1)})
-            } Else {
-                Set evidenceOk = 0
-                Do result.notes.%Push("Cited quote not found in document "_docId_"; escalated rather than trust it.")
-            }
-            Set i = i + 1
-        }
-    }
-    Set result.evidence = verified
-
-    If 'evidenceOk {
+    Set findings = parsed.findings
+    If '$IsObject(findings) {
+        Do result.notes.%Push("Agent returned no findings array; nothing can be established.")
         Set result.gate = "OVERRIDDEN"
-        Set result.decision = "ESCALATE"
         Quit result
     }
 
-    // A decision with no evidence is a guess.
-    If (result.decision '= "ESCALATE") && '(..HasVerified(verified)) {
-        Do result.notes.%Push("No verified evidence was cited; escalated.")
-        Set result.gate = "OVERRIDDEN"
-        Set result.decision = "ESCALATE"
-    }
+    // --- 2. Verify each finding ----------------------------------------
+    Set granted = {}
+    Set denied = {}
+    Set verifiedCount = 0
+    Set conflicted = 0
+    Set today = $ZDATE($HOROLOG, 3)
 
-    // Low confidence is not a decision either.
-    Set minConf = +$System.Util.GetEnviron("CONSENTGATE_MIN_CONFIDENCE")
-    If minConf = 0 Set minConf = 0.6
-    If (result.decision '= "ESCALATE") && (result.confidence < minConf) {
-        Do result.notes.%Push("Agent confidence below "_minConf_"; escalated.")
-        Set result.gate = "OVERRIDDEN"
-        Set result.decision = "ESCALATE"
-    }
-
-    If result.decision = "ESCALATE" {
-        Quit result
-    }
-
-    // --- 3. Start from the agent's scope, then correct it --------------
-    Set release = []
-    Set withhold = []
-    If $IsObject(parsed.release) {
-        Set i = 0
-        While i < parsed.release.%Size() {
-            Do release.%Push(parsed.release.%Get(i))
-            Set i = i + 1
-        }
-    }
-    If $IsObject(parsed.withhold) {
-        Set i = 0
-        While i < parsed.withhold.%Size() {
-            Do withhold.%Push(parsed.withhold.%Get(i))
-            Set i = i + 1
-        }
-    }
-
-    // Rule A: a later revocation beats an earlier authorisation.
-    If ..LatestDocIsRevocation(mrn) {
-        Do result.notes.%Push("A revocation is the most recent consent document; all release is denied.")
-        Set result.gate = "OVERRIDDEN"
-        Set release = []
-        Set withhold = ..CopyArray(requested)
-        Set result.decision = "DENY"
-        Set result.release = release
-        Set result.withhold = withhold
-        Quit result
-    }
-
-    // Rule B: protected categories need their own instrument.
     Set i = 0
-    While i < requested.%Size() {
-        Set cat = requested.%Get(i)
-        Set reason = ..CategoryBlocker(mrn, cat)
-        If reason '= "" {
-            If ..InArray(release, cat) {
-                Set release = ..Remove(release, cat)
-                Do result.notes.%Push(cat_" withheld by gate: "_reason)
-                Set result.gate = "OVERRIDDEN"
+    While i < findings.%Size() {
+        Set f = findings.%Get(i)
+        Set docId = f.docId
+        Set category = $ZCONVERT(f.%Get("category"), "U")
+        Set effect = $ZCONVERT(f.%Get("effect"), "U")
+        Set quote = f.%Get("quote")
+        Set recipient = f.%Get("recipient")
+        Set validUntil = f.%Get("validUntil")
+
+        Set ok = 0
+        Set why = ""
+
+        If (docId = "") || (quote = "") || (category = "") {
+            Set why = "incomplete finding"
+        } Else {
+            Set doc = ##class(ConsentGate.Data.ConsentDoc).%OpenId(docId)
+            If '$IsObject(doc) {
+                Set why = "document "_docId_" does not exist"
+            } ElseIf $FIND(doc.Body, quote) = 0 {
+                Set why = "quote not found verbatim in document "_docId
+            } ElseIf '..QuoteSpeaksTo(quote, category) {
+                Set why = "quote does not mention anything about "_category
+            } ElseIf (validUntil '= "") && (validUntil < today) {
+                Set why = "instrument expired on "_validUntil
+            } ElseIf (recipient '= "") && ($ZCONVERT(recipient, "U") '= $ZCONVERT(requestorOrg, "U")) {
+                Set why = "instrument names a different recipient ("_recipient_")"
+            } Else {
+                Set ok = 1
             }
-            If '..InArray(withhold, cat) Do withhold.%Push(cat)
-        } ElseIf '..InArray(release, cat) && '..InArray(withhold, cat) {
-            Do withhold.%Push(cat)
+        }
+
+        If ok {
+            Set verifiedCount = verifiedCount + 1
+            Do result.evidence.%Push({"docId": (docId), "category": (category), "effect": (effect), "quote": (quote), "verified": (1)})
+            If effect = "DENY" {
+                Do denied.%Set(category, 1)
+            } Else {
+                Do granted.%Set(category, 1)
+            }
+        } Else {
+            Do result.notes.%Push(category_" finding rejected: "_why)
+            Set result.gate = "OVERRIDDEN"
         }
         Set i = i + 1
     }
 
-    Set result.release = release
-    Set result.withhold = withhold
+    If verifiedCount = 0 {
+        Do result.notes.%Push("No finding survived verification; escalated.")
+        Set result.gate = "OVERRIDDEN"
+        Quit result
+    }
 
-    // --- 4. Recompute the verdict from the scope, not the prose --------
-    Set nRel = release.%Size()
-    Set nReq = requested.%Size()
-    If nRel = nReq {
+    // Conflicting findings are not a decision.
+    Set j = 0
+    While j < requested.%Size() {
+        Set cat = requested.%Get(j)
+        If (granted.%Get(cat) = 1) && (denied.%Get(cat) = 1) Set conflicted = 1
+        Set j = j + 1
+    }
+    If conflicted {
+        Do result.notes.%Push("Agent reported both a grant and a denial for the same category; escalated.")
+        Set result.gate = "OVERRIDDEN"
+        Quit result
+    }
+
+    // --- 3. Hard rules ---------------------------------------------------
+    // A revocation that arrives after the latest authorisation voids release.
+    If ..LatestDocIsRevocation(mrn) {
+        Do result.notes.%Push("A revocation is the most recent consent document; all release is denied.")
+        Set result.gate = "OVERRIDDEN"
+        Set result.decision = "DENY"
+        Set i = 0
+        While i < requested.%Size() {
+            Do result.withhold.%Push(requested.%Get(i))
+            Set i = i + 1
+        }
+        Quit result
+    }
+
+    // 42 CFR Part 2: substance use records need a Part 2 consent, whatever
+    // the extraction says.
+    If '..HasDocType(mrn, "PART2_CONSENT") {
+        If granted.%Get("SUBSTANCE_USE") = 1 {
+            Do granted.%Set("SUBSTANCE_USE", "")
+            Do result.notes.%Push("SUBSTANCE_USE withheld by gate: no 42 CFR Part 2 consent on file.")
+            Set result.gate = "OVERRIDDEN"
+        }
+    }
+
+    // --- 4. Decide from the permitted set, not from the model's prose ----
+    Set i = 0
+    While i < requested.%Size() {
+        Set cat = requested.%Get(i)
+        If (granted.%Get(cat) = 1) && (denied.%Get(cat) '= 1) {
+            Do result.release.%Push(cat)
+        } Else {
+            Do result.withhold.%Push(cat)
+        }
+        Set i = i + 1
+    }
+
+    Set nRel = result.release.%Size()
+    If nRel = requested.%Size() {
         Set result.decision = "RELEASE"
     } ElseIf nRel = 0 {
         Set result.decision = "DENY"
@@ -171,28 +176,29 @@ ClassMethod Apply(mrn As %String, requestorOrg As %String, requested As %Dynamic
     Quit result
 }
 
-ClassMethod CategoryBlocker(mrn As %String, category As %String) As %String
+/// Does the quoted sentence contain language that actually speaks to this
+/// category? A real sentence can be copied out of a document and still be
+/// irrelevant to the category it is used to justify.
+ClassMethod QuoteSpeaksTo(quote As %String, category As %String) As %Boolean
 {
-    // 42 CFR Part 2: substance use records need a Part 2 consent on file.
-    If category = "SUBSTANCE_USE" {
-        If '..HasDocType(mrn, "PART2_CONSENT") Quit "no 42 CFR Part 2 consent on file"
-        Quit ""
-    }
+    Set q = $ZCONVERT(quote, "U")
+    If category = "SUBSTANCE_USE" Quit ..Mentions(q, "SUBSTANCE,42 CFR,PART 2,DRUG,ALCOHOL,CHEMICAL DEPENDENCY")
+    If category = "MENTAL_HEALTH" Quit ..Mentions(q, "MENTAL,PSYCHIATRIC,PSYCHOLOG,BEHAVIORAL,PHQ")
+    If category = "HIV" Quit ..Mentions(q, "HIV,AIDS,ANTIRETROVIRAL")
+    If category = "GENETIC" Quit ..Mentions(q, "GENETIC,BRCA,GENOMIC")
+    Quit ..Mentions(q, "AUTHORIZ,AUTHORIS,RELEASE,DISCLOS,CONSENT,PERMIT,LABORATORY RESULT")
+}
 
-    // A structured DENIED row blocks the category unless a court order names it.
-    Set stmt = ##class(%SQL.Statement).%New()
-    Set q = "SELECT Status, ValidTo FROM ConsentGate_Data.StructuredConsent WHERE MRN = ? AND Category = ?"
-    Do stmt.%Prepare(q)
-    Set rs = stmt.%Execute(mrn, category)
-    If rs.%Next() {
-        If rs.Status = "DENIED" {
-            If '..HasDocType(mrn, "COURT_ORDER") Quit "category is marked DENIED in the structured consent"
-        }
-        If (rs.ValidTo '= "") && (rs.ValidTo < $ZDATE($HOROLOG, 3)) {
-            Quit "consent for this category expired on "_rs.ValidTo
-        }
+ClassMethod Mentions(text As %String, list As %String) As %Boolean
+{
+    Set found = 0
+    Set n = $LENGTH(list, ",")
+    Set i = 0
+    While i < n {
+        If $FIND(text, $PIECE(list, ",", i + 1)) > 0 Set found = 1
+        Set i = i + 1
     }
-    Quit ""
+    Quit found
 }
 
 ClassMethod HasDocType(mrn As %String, docType As %String) As %Boolean
@@ -219,22 +225,6 @@ ClassMethod LatestDocIsRevocation(mrn As %String) As %Boolean
     Quit (latestType = "REVOCATION")
 }
 
-ClassMethod IsKnownDecision(v As %String) As %Boolean
-{
-    Quit (v = "RELEASE") || (v = "REDACT") || (v = "DENY") || (v = "ESCALATE")
-}
-
-ClassMethod HasVerified(verified As %DynamicArray) As %Boolean
-{
-    Set found = 0
-    Set i = 0
-    While i < verified.%Size() {
-        If verified.%Get(i).verified = 1 Set found = 1
-        Set i = i + 1
-    }
-    Quit found
-}
-
 ClassMethod InArray(arr As %DynamicArray, value As %String) As %Boolean
 {
     Set found = 0
@@ -244,28 +234,6 @@ ClassMethod InArray(arr As %DynamicArray, value As %String) As %Boolean
         Set i = i + 1
     }
     Quit found
-}
-
-ClassMethod Remove(arr As %DynamicArray, value As %String) As %DynamicArray
-{
-    Set out = []
-    Set i = 0
-    While i < arr.%Size() {
-        If arr.%Get(i) '= value Do out.%Push(arr.%Get(i))
-        Set i = i + 1
-    }
-    Quit out
-}
-
-ClassMethod CopyArray(arr As %DynamicArray) As %DynamicArray
-{
-    Set out = []
-    Set i = 0
-    While i < arr.%Size() {
-        Do out.%Push(arr.%Get(i))
-        Set i = i + 1
-    }
-    Quit out
 }
 
 }

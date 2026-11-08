@@ -55,6 +55,10 @@ ClassMethod Seed() As %Status
     Do ..Doc("CG-0004", "COURT_ORDER", "2026-10-15", "order-wright-2026-CV-8841.pdf",
         "IN THE MATTER OF WRIGHT. The court orders the custodian to disclose the patient's BRCA1 genetic test result to the State Public Health Registry. Disclosure is limited to the single genetic finding described in the petition and to no other records.")
 
+    // CG-0003 also has a general authorisation for ordinary lab results.
+    Do ..Doc("CG-0003", "AUTHORIZATION", "2026-08-30", "scan-bello-general.pdf",
+        "AUTHORIZATION FOR RELEASE OF PROTECTED HEALTH INFORMATION. Patient Aisha Bello authorizes St. Elsewhere Community Clinic to receive laboratory results for the purpose of continuing care. Effective 2026-08-30, expires 2027-08-30.")
+
     // CG-0005: authorisation that expired before the request.
     Do ..Doc("CG-0005", "AUTHORIZATION", "2024-01-10", "scan-park-auth.pdf",
         "AUTHORIZATION FOR RELEASE OF PROTECTED HEALTH INFORMATION. Patient Lena Park authorizes release of laboratory results to St. Elsewhere Community Clinic for treatment purposes. This authorization expires on 2025-01-10.")

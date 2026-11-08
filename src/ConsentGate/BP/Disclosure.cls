@@ -46,8 +46,8 @@ Method OnRequest(pRequest As Ens.StreamContainer, Output pResponse As Ens.Respon
         }
 
         // --- Which consent categories does this message contain? -------
-        Set catsSeen = ##class(%DynamicObject).%New()
-        Set requested = ##class(%DynamicArray).%New()
+        Set catsSeen = {}
+        Set requested = []
         Set i = 0
         While i < n {
             Set seg = $PIECE(text, cr, i + 1)
@@ -170,19 +170,41 @@ ClassMethod RunAgent(mrn As %String, org As %String, purpose As %String, request
 }
 
 /// Deterministic stand-in used when no API key is available (CONSENTGATE_REPLAY=1).
-/// Quotes below are copied verbatim from the seeded documents.
+/// Quotes are copied verbatim from the seeded documents; document ids are looked
+/// up at runtime so reseeding cannot invalidate them.
 ClassMethod ReplayResponse(mrn As %String) As %String
 {
     If mrn = "CG-0001" {
-        Quit {"decision":"REDACT","release":["GENERAL"],"withhold":["SUBSTANCE_USE"],"evidence":[{"docId":1,"quote":"This authorization does not extend to records of substance use disorder treatment"}],"rationale":"Authorisation covers diabetes and kidney results only; substance use records are expressly excluded.","confidence":0.93}.%ToJSON()
+        Set findings = []
+        Do findings.%Push({"docId": (..DocId(mrn, "AUTHORIZATION", "diabetes and kidney function")), "category": "GENERAL", "effect": "GRANT", "recipient": "ORG-CLINIC", "validUntil": "2027-10-02", "quote": "Patient Maria Alvarez authorizes St. Elsewhere Community Clinic to receive laboratory results related to diabetes and kidney function"})
+        Do findings.%Push({"docId": (..DocId(mrn, "AUTHORIZATION", "diabetes and kidney function")), "category": "SUBSTANCE_USE", "effect": "DENY", "quote": "This authorization does not extend to records of substance use disorder treatment"})
+        Quit {"findings": (findings), "rationale": "The authorisation covers diabetes and kidney results; it expressly excludes substance use records.", "confidence": 0.93}.%ToJSON()
     }
     If mrn = "CG-0002" {
-        Quit {"decision":"DENY","release":[],"withhold":["GENERAL"],"evidence":[{"docId":3,"quote":"revoke the authorization I signed on 2026-09-14"}],"rationale":"The most recent document revokes the prior authorisation.","confidence":0.95}.%ToJSON()
+        Set findings = []
+        Do findings.%Push({"docId": (..DocId(mrn, "REVOCATION", "revoke the authorization")), "category": "GENERAL", "effect": "DENY", "quote": "revoke the authorization I signed on 2026-09-14"})
+        Quit {"findings": (findings), "rationale": "The patient revoked the authorisation that would otherwise have applied.", "confidence": 0.95}.%ToJSON()
     }
     If mrn = "CG-0003" {
-        Quit {"decision":"REDACT","release":["GENERAL"],"withhold":["HIV"],"evidence":[{"docId":5,"quote":"declined, in writing, the release of HIV-related laboratory results"}],"rationale":"Patient declined HIV disclosure; other results are permitted.","confidence":0.91}.%ToJSON()
+        Set findings = []
+        Do findings.%Push({"docId": (..DocId(mrn, "AUTHORIZATION", "Aisha Bello authorizes")), "category": "GENERAL", "effect": "GRANT", "recipient": "ORG-CLINIC", "validUntil": "2027-08-30", "quote": "Patient Aisha Bello authorizes St. Elsewhere Community Clinic to receive laboratory results for the purpose of continuing care"})
+        Do findings.%Push({"docId": (..DocId(mrn, "PART2_CONSENT", "substance use disorder treatment records")), "category": "SUBSTANCE_USE", "effect": "GRANT", "recipient": "ORG-CLINIC", "validUntil": "2027-08-30", "quote": "Patient Aisha Bello consents to disclosure of substance use disorder treatment records to St. Elsewhere Community Clinic only"})
+        Do findings.%Push({"docId": (..DocId(mrn, "AUTHORIZATION", "declined, in writing")), "category": "HIV", "effect": "DENY", "quote": "declined, in writing, the release of HIV-related laboratory results"})
+        Quit {"findings": (findings), "rationale": "General and Part 2 authorisations are in force for this clinic; HIV was refused in writing.", "confidence": 0.91}.%ToJSON()
     }
-    Quit {"decision":"ESCALATE","release":[],"withhold":[],"evidence":[],"rationale":"No usable evidence in replay mode.","confidence":0.2}.%ToJSON()
+    Set findings = []
+    Do findings.%Push({"docId": (..DocId(mrn, "AUTHORIZATION", "Lena Park")), "category": "GENERAL", "effect": "GRANT", "validUntil": "2025-01-10", "quote": "Patient Lena Park authorizes release of laboratory results to St. Elsewhere Community Clinic for treatment purposes"})
+    Quit {"findings": (findings), "rationale": "The only authorisation on file appears to have expired.", "confidence": 0.72}.%ToJSON()
+}
+
+ClassMethod DocId(mrn As %String, docType As %String, contains As %String) As %Integer
+{
+    Set found = 0
+    Set rs = ##class(ConsentGate.Data.ConsentDoc).ForMRN(mrn)
+    While rs.%Next() {
+        If (found = 0) && (rs.DocType = docType) && ($FIND(rs.Body, contains) > 0) Set found = rs.ID
+    }
+    Quit found
 }
 
 }
