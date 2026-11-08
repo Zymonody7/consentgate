@@ -1,0 +1,90 @@
+<h2>The decision we automated</h2>
+<p>An outside organisation asks for a patient's lab results, as an HL7 v2.5.1 ORU^R01 file in a watched directory. The justification sits in the consent file: an authorisation letter, a revocation posted nine days later, a 42 CFR Part 2 consent naming one clinic, occasionally a court order naming one genetic result.</p>
+<p>A person reads it all and decides what may leave the building. The reasoning is usually a free-text note.</p>
+<p>ConsentGate is an IRIS Interoperability production that automates the reading and checks, not the judgment. The message enters through <code>EnsLib.File.PassthroughService</code>, lands in <code>ConsentGate.BP.Disclosure</code>, and leaves as <code>RELEASE</code>, <code>REDACT</code>, <code>DENY</code> or <code>ESCALATE</code>. A redaction keeps the OBX segment and replaces its value, so the recipient can see something was withheld:</p>
+<pre><code>OBX|3|NM|9459-0^Ethyl glucuronide, urine||[WITHHELD: SUBSTANCE_USE]|ng/mL||H|||F</code></pre>
+<p>Every request writes a row to <code>ConsentGate_Data.Decision</code> before routing. Decision, released and withheld categories, evidence, gate result, injection flag and latency are columns, not prose.</p>
+<h2>The split: findings in, disposition out</h2>
+<p><img src="https://raw.githubusercontent.com/Zymonody7/consentgate/main/docs/decision-flow.png" alt="One request, one verified decision" style="max-width:100%"></p>
+<p>The agent is a <code>%AI.Agent</code> with three read-only tools. Its contract has no <code>decision</code> field. Each finding says: this document, this category, grant or deny, this recipient, valid until this date, and here is the sentence.</p>
+<pre><code>{
+  "findings": [
+    {
+      "docId": 4,
+      "category": "SUBSTANCE_USE",
+      "effect": "GRANT",
+      "recipient": "ORG-CLINIC",
+      "validUntil": "2027-08-30",
+      "quote": "verbatim sentence from that document"
+    }
+  ],
+  "rationale": "one or two sentences",
+  "confidence": 0.0-1.0
+}</code></pre>
+<p><code>findings[]</code> is the entire contract. There is nowhere to write "decision: RELEASE", so prompt injection, drift or a confidently wrong model has no field in which to emit a disposition. If one sends a decision anyway, <code>Gate.Apply</code> never reads it.</p>
+<p>The gate then does five things, in this order:</p>
+<p>1. <code>quote</code> must be a literal substring of the cited document's <code>Body</code>.</p>
+<p>2. The quote must contain language that speaks to the category. A real sentence can still be irrelevant to the category it is used to justify.</p>
+<p>3. Recipient and validity must cover this request.</p>
+<p>4. A later revocation voids every grant.</p>
+<p>5. <code>SUBSTANCE_USE</code> needs a 42 CFR Part 2 consent on file, whatever the extraction says.</p>
+<p>The verification chain in <code>ConsentGate.Policy.Gate</code> is one <code>If/ElseIf</code>:</p>
+<pre><code>} ElseIf $FIND(doc.Body, quote) = 0 {
+    Set why = "quote not found verbatim in document "_docId
+} ElseIf '..QuoteSpeaksTo(quote, category) {
+    Set why = "quote does not mention anything about "_category
+} ElseIf (validUntil '= "") &amp;&amp; (validUntil &lt; today) {
+    Set why = "instrument expired on "_validUntil
+} ElseIf (recipient '= "") &amp;&amp; ($ZCONVERT(recipient, "U") '= $ZCONVERT(requestorOrg, "U")) {
+    Set why = "instrument names a different recipient ("_recipient_")"
+}</code></pre>
+<p>A rejected finding is appended to <code>notes</code> and sets <code>gate = "OVERRIDDEN"</code>. If none survives, the disposition is <code>ESCALATE</code> and nothing is released; otherwise the category is withheld. The final decision comes from the verified map, not the model's rationale:</p>
+<pre><code>If latestEff.%Get(cat) = "GRANT" {
+    Do result.release.%Push(cat)
+} Else {
+    Do result.withhold.%Push(cat)
+}</code></pre>
+<p>Silence is not permission. Contradiction is not a decision. Unparseable output is escalated without being acted on.</p>
+<h2>The bug a live model found</h2>
+<p>Our first contradiction rule was wrong. We collected verified findings into two sets, <code>granted</code> and <code>denied</code>, and escalated if a category appeared in both:</p>
+<pre><code>If (granted.%Get(cat) = 1) &amp;&amp; (denied.%Get(cat) = 1) Set conflicted = 1</code></pre>
+<p>For patient CG-0002 this fired on an ordinary sequence: an authorisation received 2026-09-14, a revocation received 2026-10-28. A live DeepSeek run reported a <code>GRANT</code> from the first and a <code>DENY</code> from the second, both with correct verbatim quotes. The gate escalated a case whose answer was <code>DENY</code>.</p>
+<p>The model was right. A later denial is an override, not an ambiguity; the document date distinguishes them. The gate now keeps the latest instrument per category and escalates only when same-day findings disagree:</p>
+<pre><code>Set prior = latestDate.%Get(category)
+If (prior = "") || (docDate &gt; prior) {
+    Do latestDate.%Set(category, docDate)
+    Do latestEff.%Set(category, effect)
+} ElseIf (docDate = prior) &amp;&amp; (effect '= latestEff.%Get(category)) {
+    Set conflicted = 1
+}</code></pre>
+<p><code>docDate</code> is the document's <code>ReceivedOn</code>, not the <code>validUntil</code> the model reported. Validity is a claim to verify; receipt date is a fact on the row. Two findings dated the same day that disagree still escalate; there is no later instrument to prefer.</p>
+<p>The agent was not the weak part. The policy encoded a plausible rule that was false; a real pair of correct citations exposed it.</p>
+<h2>The harness</h2>
+<p><code>eval/cases.json</code> holds ten consent situations with ground-truth dispositions, each paired with a model output. <code>ConsentGate.Eval.Harness</code> resolves document references in the running database, builds the JSON the agent would return, and calls <code>Gate.Apply</code>. No API key is needed.</p>
+<p>They cover: an authorisation that expressly excludes a category; a fabricated quote; a real quote used for the wrong category; a revocation that voids a valid grant; expiry; a Part 2 consent that releases substance use; a Part 2 consent naming another recipient; two same-document findings that disagree; no findings; and a court order covering the genetic result it names.</p>
+<p>The harness reports decision match and disposition-plus-scope match, both 10/10 on the current gate.</p>
+<p>It feeds fixed model outputs into the gate. It measures the gate's handling of those outputs, including four adversarial ones. It does not measure the model: not extraction accuracy, not whether a live model would produce those findings. Production uses <code>deepseek-chat</code>; the harness is what a reviewer can reproduce without a key. Ten cases is a regression test, not a benchmark.</p>
+<h2>A note for IRIS developers: no HL7 schema tables</h2>
+<p>The community IRIS for Health image does not ship the HL7 v2 schema tables. <code>^EnsHL7</code> is empty, so <code>EnsLib.HL7.Message</code> parses a message into a single MSH segment and <code>GetValueAt</code> returns nothing useful. A disclosure decision should not depend on a licensed schema library, so <code>ConsentGate.BP.Disclosure</code> reads the ORU^R01 as text and extracts the fields it needs:</p>
+<pre><code>Set segId = $PIECE(seg, "|", 1)
+If segId = "MSH" {
+    Set org = $PIECE(seg, "|", 5)
+    Set purpose = $PIECE(seg, "|", 6)
+    Set reqId = $PIECE(seg, "|", 10)
+}
+If segId = "PID" Set mrn = $PIECE(seg, "|", 4)</code></pre>
+<p>OBX-3 observation codes map to categories through <code>ConsentGate.Data.CodeMap</code>.</p>
+<p>This is not a general HL7 parser. It handles the fields the gate needs, and redaction rewrites OBX-5 in place. With schema tables, <code>EnsLib.HL7.Message</code> is the better choice; the gate does not care which produced the segments.</p>
+<h2>What we do not claim</h2>
+<p>• Three rules, one jurisdiction: authorisation scope and recipient, revocation precedence, Part 2 consent. This demonstrates a pattern, not a compliance product.</p>
+<p>• Synthetic data only. No real PHI is in the repository, the seeds or the evaluation cases.</p>
+<p>• The category keywords in <code>QuoteSpeaksTo</code> are a heuristic list. A production system would bind them to a maintained terminology; the check is a substring search, not natural-language inference.</p>
+<p>• Quote verification is exact substring matching. OCR noise, reflowed PDFs and smart quotes would need normalisation first.</p>
+<p>• Ten evaluation cases, written by us, with model outputs written by us.</p>
+<p>The claim we make is narrower: the model's conclusion is not an input. The agent reads, the gate checks the sentence, and nothing leaves on the model's opinion.</p>
+<h2>Paperwork that is not text</h2>
+<p>An <code>OBX</code> with value type <code>ED</code> carries an authorisation as a base64 attachment inside the</p>
+<p>message. The production decodes it, stores it as a consent document, and the agent can</p>
+<p>cite it in the same decision. Every document records whether the text the gate verifies</p>
+<p>against came from TEXT, an EMBEDDED attachment, or an OCR transcript; a protected category</p>
+<p>granted from an OCR transcript escalates.</p>
